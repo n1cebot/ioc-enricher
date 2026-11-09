@@ -1,0 +1,17 @@
+# Secrets (API keys)
+.env
+.env.*
+!.env.example
+
+# Python virtual environment
+venv/
+.venv/
+
+# Python bytecode cache
+__pycache__/
+*.pyc
+
+# Editor and OS files
+.vscode/
+Thumbs.db
+desktop.ini
