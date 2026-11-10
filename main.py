@@ -45,3 +45,18 @@ domain_matches = re.findall(r"\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b", text)
 print("\nDomains:")
 for domain in sorted(set(domain_matches)):
     print(domain)
+
+# Hashes are identified by length only. The \b anchors ensure an
+# exact length, so a SHA256 is not also reported as an MD5 or SHA1.
+hashes_by_type = {}
+hash_lengths = {"MD5": 32, "SHA1": 40, "SHA256": 64}
+for hash_type, length in hash_lengths.items():
+    hash_pattern = rf"\b[a-fA-F0-9]{{{length}}}\b"
+    hash_matches = [h.lower() for h in re.findall(hash_pattern, text)]
+    hashes_by_type[hash_type] = set(hash_matches)
+
+print("\nHashes:")
+for hash_type, hashes in hashes_by_type.items():
+    print(hash_type)
+    for hash_value in sorted(hashes):
+        print(hash_value)
