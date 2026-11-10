@@ -2,6 +2,7 @@ Incident report - phishing campaign (fictional, for testing)
 
 The phishing email was sent from 203.0.113.45 and linked to hxxp://login-secure-update[.]example[.]com/verify.
 A second sample contacted 198.51.100.7 on port 443 and later 198.51.100.7 again.
+The malware also sent DNS queries to public resolvers 8.8.8.8 and 1.1.1.1.
 Defanged URL: hxxps://cdn.example[.]net/payload[.]exe
 Plain URL: https://files.example.org/download/report.pdf
 Domains seen: malicious-site.example.com, update[.]example[.]org
