@@ -5,7 +5,13 @@ import re
 input_path = "sample.txt"
 
 with open(input_path, encoding="utf-8") as f:
-    text = f.read()
+    raw_text = f.read()
+
+# Refang IOCs (e.g. evil[.]com -> evil.com) so the regexes can match
+text = raw_text
+refang_replacements = {"hxxp": "http", r"\[\.\]": ".", r"\[:\]": ":"}
+for defanged, normal in refang_replacements.items():
+    text = re.sub(defanged, normal, text, flags=re.IGNORECASE)
 
 # Find IPv4 candidates: four dot-separated groups of 1-3 digits.
 # Values like 999.1.1.1 still match here; they are validated below.
