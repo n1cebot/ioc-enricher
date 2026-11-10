@@ -22,7 +22,7 @@ for candidate in ip_candidates:
         # e.g. when an octet exceeds 255.
         print(f"Skipping invalid IP address: {candidate}")
 
-print("\nValid IP addresses:")
+print("\nIP addresses:")
 for ip in sorted(valid_ips):
     # is_global is False not only for private ranges (RFC 1918),
     # but also for loopback and documentation ranges (RFC 5737).
@@ -30,3 +30,18 @@ for ip in sorted(valid_ips):
         print(f"{ip} --- public")
     else:
         print(f"{ip} --- non-public")
+
+# Match http/https URLs up to the next whitespace. The trailing \b
+# drops sentence punctuation such as a final period.
+# Defanged URLs (hxxp://, [.]) must be refanged first to match.
+url_matches = re.findall(r"\bhttps?://\S+\b", text, re.IGNORECASE)
+print("\nURLs:")
+for url in sorted(set(url_matches)):
+    print(url)
+
+# Match domains: dot-separated labels of letters, digits or hyphens,
+# ending with a letters-only TLD, so IP addresses are not matched.
+domain_matches = re.findall(r"\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b", text)
+print("\nDomains:")
+for domain in sorted(set(domain_matches)):
+    print(domain)
