@@ -67,20 +67,39 @@ def extract_hashes(text):
     return hashes_by_type
 
 
+def extract_iocs(raw_text):
+    """Refang text and return all IOCs found in it.
+
+    Keys: "valid_ips", "invalid_ips", "urls", "domains" and "hashes".
+    Hashes are grouped by type (MD5, SHA1, SHA256).
+    """
+    # Refang IOCs (e.g. evil[.]com -> evil.com) so the regexes can match
+    text = refang_text(raw_text)
+    valid_ips, invalid_ips = extract_ips(text)
+    urls = extract_urls(text)
+    domains = extract_domains(text)
+    hashes_by_type = extract_hashes(text)
+
+    return {
+        "valid_ips": valid_ips,
+        "invalid_ips": invalid_ips,
+        "urls": urls,
+        "domains": domains,
+        "hashes": hashes_by_type,
+    }
+
+
 input_path = "sample.txt"
 with open(input_path, encoding="utf-8") as f:
     raw_text = f.read()
 
-# Refang IOCs (e.g. evil[.]com -> evil.com) so the regexes can match
-text = refang_text(raw_text)
+iocs = extract_iocs(raw_text)
 
-valid_ips, invalid_ips = extract_ips(text)
-
-for invalid_ip in invalid_ips:
+for invalid_ip in iocs["invalid_ips"]:
     print(f"Skipping invalid IP address: {invalid_ip}")
 
 print("\nIP addresses:")
-for ip in valid_ips:
+for ip in iocs["valid_ips"]:
     # is_global is False not only for private ranges (RFC 1918),
     # but also for loopback and documentation ranges (RFC 5737).
     if ip.is_global:
@@ -88,19 +107,16 @@ for ip in valid_ips:
     else:
         print(f"{ip} --- non-public")
 
-urls = extract_urls(text)
 print("\nURLs:")
-for url in urls:
+for url in iocs["urls"]:
     print(url)
 
-domains = extract_domains(text)
 print("\nDomains:")
-for domain in domains:
+for domain in iocs["domains"]:
     print(domain)
 
-hashes_by_type = extract_hashes(text)
 print("\nHashes:")
-for hash_type, hashes in hashes_by_type.items():
+for hash_type, hashes in iocs["hashes"].items():
     print(hash_type)
     for hash_value in hashes:
         print(hash_value)
