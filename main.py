@@ -2,16 +2,53 @@ import ipaddress
 import re
 
 
-input_path = "sample.txt"
+REFANG_REPLACEMENTS = {"hxxp": "http", r"\[\.\]": ".", r"\[:\]": ":"}
+HASH_LENGTHS = {"MD5": 32, "SHA1": 40, "SHA256": 64}
 
+
+def refang_text(text):
+    """Return text with defanged IOCs restored to their normal form."""
+    for defanged, normal in REFANG_REPLACEMENTS.items():
+        text = re.sub(defanged, normal, text, flags=re.IGNORECASE)
+    return text
+
+
+def extract_urls(text):
+    """Return a sorted list of unique http/https URLs found in text."""
+    # Match http/https URLs up to the next whitespace. The trailing \b
+    # drops sentence punctuation such as a final period.
+    # Defanged URLs (hxxp://, [.]) must be refanged first to match.
+    url_matches = re.findall(r"\bhttps?://\S+\b", text, re.IGNORECASE)
+    return sorted(set(url_matches))
+
+
+def extract_domains(text):
+    """Return a sorted list of unique domain names found in text."""
+    # Match domains: dot-separated labels of letters, digits or
+    # hyphens, ending with a letters-only TLD, so IP addresses are
+    # not matched.
+    domain_matches = re.findall(r"\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b", text)
+    return sorted(set(domain_matches))
+
+
+def extract_hashes(text):
+    """Return lowercase hashes found in text, grouped by type."""
+    hashes_by_type = {}
+    # Hashes are identified by length only. The \b anchors ensure an
+    # exact length, so a SHA256 is not also reported as an MD5 or SHA1.
+    for hash_type, length in HASH_LENGTHS.items():
+        hash_pattern = rf"\b[a-fA-F0-9]{{{length}}}\b"
+        hash_matches = [h.lower() for h in re.findall(hash_pattern, text)]
+        hashes_by_type[hash_type] = sorted(set(hash_matches))
+    return hashes_by_type
+
+
+input_path = "sample.txt"
 with open(input_path, encoding="utf-8") as f:
     raw_text = f.read()
 
 # Refang IOCs (e.g. evil[.]com -> evil.com) so the regexes can match
-text = raw_text
-refang_replacements = {"hxxp": "http", r"\[\.\]": ".", r"\[:\]": ":"}
-for defanged, normal in refang_replacements.items():
-    text = re.sub(defanged, normal, text, flags=re.IGNORECASE)
+text = refang_text(raw_text)
 
 # Find IPv4 candidates: four dot-separated groups of 1-3 digits.
 # Values like 999.1.1.1 still match here; they are validated below.
@@ -37,32 +74,19 @@ for ip in sorted(valid_ips):
     else:
         print(f"{ip} --- non-public")
 
-# Match http/https URLs up to the next whitespace. The trailing \b
-# drops sentence punctuation such as a final period.
-# Defanged URLs (hxxp://, [.]) must be refanged first to match.
-url_matches = re.findall(r"\bhttps?://\S+\b", text, re.IGNORECASE)
+urls = extract_urls(text)
 print("\nURLs:")
-for url in sorted(set(url_matches)):
+for url in urls:
     print(url)
 
-# Match domains: dot-separated labels of letters, digits or hyphens,
-# ending with a letters-only TLD, so IP addresses are not matched.
-domain_matches = re.findall(r"\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b", text)
+domains = extract_domains(text)
 print("\nDomains:")
-for domain in sorted(set(domain_matches)):
+for domain in domains:
     print(domain)
 
-# Hashes are identified by length only. The \b anchors ensure an
-# exact length, so a SHA256 is not also reported as an MD5 or SHA1.
-hashes_by_type = {}
-hash_lengths = {"MD5": 32, "SHA1": 40, "SHA256": 64}
-for hash_type, length in hash_lengths.items():
-    hash_pattern = rf"\b[a-fA-F0-9]{{{length}}}\b"
-    hash_matches = [h.lower() for h in re.findall(hash_pattern, text)]
-    hashes_by_type[hash_type] = set(hash_matches)
-
+hashes_by_type = extract_hashes(text)
 print("\nHashes:")
 for hash_type, hashes in hashes_by_type.items():
     print(hash_type)
-    for hash_value in sorted(hashes):
+    for hash_value in hashes:
         print(hash_value)
