@@ -11,6 +11,7 @@ Internal hosts: 192.168.1.10, 10.0.0.5
 Invalid value that looks like an IP: 999.1.1.1
 Version string that is not an IP: 1.2.3
 Too many digits, not an IP: 172.16.5.1234
+Attachment: Invoice.PDF
 
 Hashes:
 MD5: 44d88612fea8a8f36de82e1278abb02f

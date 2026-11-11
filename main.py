@@ -3,6 +3,13 @@ import re
 
 
 REFANG_REPLACEMENTS = {"hxxp": "http", r"\[\.\]": ".", r"\[:\]": ":"}
+
+# File extensions that are not TLDs, so a match such as report.pdf
+# can be dropped from domain results. Extensions that are also real
+# TLDs (e.g. zip, mov, py, pl) are left out on purpose.
+FILE_EXTENSIONS = {"exe", "dll", "msi", "bat", "ps1", "vbs", "js",
+                   "pdf", "doc", "docx", "xlsx", "txt", "lnk", "iso"}
+
 HASH_LENGTHS = {"MD5": 32, "SHA1": 40, "SHA256": 64}
 
 
@@ -47,12 +54,21 @@ def extract_urls(text):
 
 
 def extract_domains(text):
-    """Return a sorted list of unique domain names found in text."""
+    """Return a sorted list of unique domain names found in text.
+
+    Matches ending with a common file extension (e.g. report.pdf)
+    are skipped, since they are file names rather than domains.
+    """
     # Match domains: dot-separated labels of letters, digits or
     # hyphens, ending with a letters-only TLD, so IP addresses are
     # not matched.
     domain_matches = re.findall(r"\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b", text)
-    return sorted(set(domain_matches))
+    domains = []
+    for match in domain_matches:
+        suffix = match.rsplit(".", 1)[-1]
+        if suffix.lower() not in FILE_EXTENSIONS:
+            domains.append(match)
+    return sorted(set(domains))
 
 
 def extract_hashes(text):
