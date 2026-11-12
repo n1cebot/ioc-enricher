@@ -3,6 +3,7 @@ import ipaddress
 import re
 
 
+IOC_TYPES = ["ips", "urls", "domains", "hashes"]
 REFANG_REPLACEMENTS = {"hxxp": "http", r"\[\.\]": ".", r"\[:\]": ":"}
 HASH_LENGTHS = {"MD5": 32, "SHA1": 40, "SHA256": 64}
 
@@ -92,6 +93,15 @@ def extract_iocs(raw_text):
 parser = argparse.ArgumentParser(
     description="Extract IOCs (IPs, URLs, domains, hashes) from a text file.")
 parser.add_argument("input_file", help="path to the input text file")
+parser.add_argument(
+    "-t",
+    "--types",
+    nargs="+",
+    choices=IOC_TYPES,
+    default=IOC_TYPES,
+    metavar="TYPE",
+    help=f"IOC types to show: {', '.join(IOC_TYPES)} (default: all)",
+)
 args = parser.parse_args()
 
 try:
@@ -104,27 +114,31 @@ except UnicodeDecodeError:
 
 iocs = extract_iocs(raw_text)
 
-for invalid_ip in iocs["invalid_ips"]:
-    print(f"Skipping invalid IP address: {invalid_ip}")
+if "ips" in args.types:
+    for invalid_ip in iocs["invalid_ips"]:
+        print(f"Skipping invalid IP address: {invalid_ip}")
 
-print("\nIP addresses:")
-for ip in iocs["valid_ips"]:
+    print("\nIP addresses:")
     # is_global is False for private, loopback and documentation IPs.
-    if ip.is_global:
-        print(f"{ip} --- public")
-    else:
-        print(f"{ip} --- non-public")
+    for ip in iocs["valid_ips"]:
+        if ip.is_global:
+            print(f"{ip} --- public")
+        else:
+            print(f"{ip} --- non-public")
 
-print("\nURLs:")
-for url in iocs["urls"]:
-    print(url)
+if "urls" in args.types:
+    print("\nURLs:")
+    for url in iocs["urls"]:
+        print(url)
 
-print("\nDomains:")
-for domain in iocs["domains"]:
-    print(domain)
+if "domains" in args.types:
+    print("\nDomains:")
+    for domain in iocs["domains"]:
+        print(domain)
 
-print("\nHashes:")
-for hash_type, hashes in iocs["hashes"].items():
-    print(hash_type)
-    for hash_value in hashes:
-        print(hash_value)
+if "hashes" in args.types:
+    print("\nHashes:")
+    for hash_type, hashes in iocs["hashes"].items():
+        print(hash_type)
+        for hash_value in hashes:
+            print(hash_value)
