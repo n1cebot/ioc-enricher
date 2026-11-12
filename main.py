@@ -1,3 +1,4 @@
+import argparse
 import ipaddress
 import re
 
@@ -88,9 +89,18 @@ def extract_iocs(raw_text):
     }
 
 
-input_path = "sample.txt"
-with open(input_path, encoding="utf-8") as f:
-    raw_text = f.read()
+parser = argparse.ArgumentParser(
+    description="Extract IOCs (IPs, URLs, domains, hashes) from a text file.")
+parser.add_argument("input_file", help="path to the input text file")
+args = parser.parse_args()
+
+try:
+    with open(args.input_file, encoding="utf-8") as f:
+        raw_text = f.read()
+except OSError as error:
+    parser.error(f"cannot read {args.input_file}: {error.strerror}")
+except UnicodeDecodeError:
+    parser.error(f"{args.input_file} is not a UTF-8 text file")
 
 iocs = extract_iocs(raw_text)
 
