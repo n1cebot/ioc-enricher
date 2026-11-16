@@ -1,8 +1,40 @@
 """Command-line interface for extracting IOCs from a text file."""
 
 import argparse
+import os
+
+import requests
+from dotenv import load_dotenv
 
 from extractor import IOC_TYPES, extract_iocs
+
+ABUSEIPDB_CHECK_URL = "https://api.abuseipdb.com/api/v2/check"
+ABUSEIPDB_MAX_AGE_DAYS = 90
+
+
+def check_ip_abuseipdb(ip_address, api_key):
+    """Look up an IP address in AbuseIPDB and return the report data.
+
+    Query the CHECK endpoint and return the "data" dict from the JSON
+    response (e.g. abuseConfidenceScore, countryCode, totalReports).
+    """
+    headers = {
+        "Accept": "application/json",
+        "Key": api_key,
+    }
+    params = {
+        "ipAddress": ip_address,
+        "maxAgeInDays": ABUSEIPDB_MAX_AGE_DAYS,
+    }
+
+    response = requests.get(
+        ABUSEIPDB_CHECK_URL,
+        headers=headers,
+        params=params,
+        timeout=10,
+    )
+    return response.json()["data"]
+
 
 parser = argparse.ArgumentParser(
     description="Extract IOCs (IPs, URLs, domains, hashes) from a text file.")
@@ -56,3 +88,13 @@ if "hashes" in args.types:
         print(hash_type)
         for hash_value in hashes:
             print(hash_value)
+
+load_dotenv()
+api_key = os.getenv("ABUSEIPDB_API_KEY")
+abuseipdb_result = check_ip_abuseipdb("8.8.8.8", api_key)
+
+checked_ip = abuseipdb_result["ipAddress"]
+abuse_score = abuseipdb_result["abuseConfidenceScore"]
+
+print("\nAbuseIPDB results:")
+print(f"{checked_ip} --- abuse confidence score: {abuse_score}/100")
