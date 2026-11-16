@@ -18,7 +18,10 @@ def check_ip_abuseipdb(ip_address, api_key):
 
     Query the CHECK endpoint and return the "data" dict from the JSON
     response (e.g. abuseConfidenceScore, countryCode, totalReports).
-    Raise requests.HTTPError if AbuseIPDB returns an error status code.
+
+    Raise requests.HTTPError for an error status code,
+    requests.ConnectionError if AbuseIPDB cannot be reached, and
+    requests.Timeout if it does not respond in time.
     """
     headers = {
         "Accept": "application/json",
@@ -121,6 +124,12 @@ except requests.HTTPError as error:
         )
     else:
         sys.exit(f"error: AbuseIPDB request failed (HTTP {status_code}).")
+except requests.Timeout:
+    sys.exit("error: AbuseIPDB did not respond in time. Try again later.")
+except requests.ConnectionError:
+    sys.exit(
+        "error: cannot connect to AbuseIPDB. Check your internet connection."
+    )
 
 checked_ip = abuseipdb_result["ipAddress"]
 abuse_score = abuseipdb_result["abuseConfidenceScore"]
