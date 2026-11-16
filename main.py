@@ -95,44 +95,52 @@ if "hashes" in args.types:
         for hash_value in hashes:
             print(hash_value)
 
-load_dotenv()
-api_key = os.getenv("ABUSEIPDB_API_KEY")
-if not api_key:
-    sys.exit(
-        "error: ABUSEIPDB_API_KEY is not set. "
-        "Add your AbuseIPDB API key to .env (see .env.example)."
-    )
+public_ips = [ip for ip in iocs["valid_ips"] if ip.is_global]
 
-try:
-    abuseipdb_result = check_ip_abuseipdb("8.8.8.8", api_key)
-except requests.HTTPError as error:
-    status_code = error.response.status_code
-    if status_code == 401:
+if "ips" in args.types and public_ips:
+    load_dotenv()
+    api_key = os.getenv("ABUSEIPDB_API_KEY")
+    if not api_key:
         sys.exit(
-            "error: AbuseIPDB rejected the API key (HTTP 401). "
-            "Check ABUSEIPDB_API_KEY in .env."
+            "error: ABUSEIPDB_API_KEY is not set. "
+            "Add your AbuseIPDB API key to .env (see .env.example)."
         )
-    elif status_code == 429:
-        sys.exit(
-            "error: AbuseIPDB daily request limit reached (HTTP 429). "
-            "Try again tomorrow."
-        )
-    elif 500 <= status_code <= 599:
-        sys.exit(
-            f"error: AbuseIPDB server error (HTTP {status_code}). "
-            "Try again later."
-        )
-    else:
-        sys.exit(f"error: AbuseIPDB request failed (HTTP {status_code}).")
-except requests.Timeout:
-    sys.exit("error: AbuseIPDB did not respond in time. Try again later.")
-except requests.ConnectionError:
-    sys.exit(
-        "error: cannot connect to AbuseIPDB. Check your internet connection."
-    )
 
-checked_ip = abuseipdb_result["ipAddress"]
-abuse_score = abuseipdb_result["abuseConfidenceScore"]
+    print("\nAbuseIPDB results:")
+    for ip in public_ips:
+        try:
+            abuseipdb_result = check_ip_abuseipdb(str(ip), api_key)
+        except requests.HTTPError as error:
+            status_code = error.response.status_code
+            if status_code == 401:
+                sys.exit(
+                    "error: AbuseIPDB rejected the API key (HTTP 401). "
+                    "Check ABUSEIPDB_API_KEY in .env."
+                )
+            elif status_code == 429:
+                sys.exit(
+                    "error: AbuseIPDB daily request limit reached (HTTP 429). "
+                    "Try again tomorrow."
+                )
+            elif 500 <= status_code <= 599:
+                sys.exit(
+                    f"error: AbuseIPDB server error (HTTP {status_code}). "
+                    "Try again later."
+                )
+            else:
+                sys.exit(
+                    f"error: AbuseIPDB request failed (HTTP {status_code})."
+                )
+        except requests.Timeout:
+            sys.exit(
+                "error: AbuseIPDB did not respond in time. Try again later."
+            )
+        except requests.ConnectionError:
+            sys.exit(
+                "error: cannot connect to AbuseIPDB. "
+                "Check your internet connection."
+            )
 
-print("\nAbuseIPDB results:")
-print(f"{checked_ip} --- abuse confidence score: {abuse_score}/100")
+        checked_ip = abuseipdb_result["ipAddress"]
+        abuse_score = abuseipdb_result["abuseConfidenceScore"]
+        print(f"{checked_ip} --- abuse confidence score: {abuse_score}/100")
