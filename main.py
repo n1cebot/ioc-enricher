@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import sys
 
 import requests
 from dotenv import load_dotenv
@@ -91,6 +92,12 @@ if "hashes" in args.types:
 
 load_dotenv()
 api_key = os.getenv("ABUSEIPDB_API_KEY")
+if not api_key:
+    sys.exit(
+        "error: ABUSEIPDB_API_KEY is not set. "
+        "Add your AbuseIPDB API key to .env (see .env.example)."
+    )
+
 abuseipdb_result = check_ip_abuseipdb("8.8.8.8", api_key)
 
 checked_ip = abuseipdb_result["ipAddress"]
