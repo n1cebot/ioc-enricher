@@ -18,6 +18,7 @@ def check_ip_abuseipdb(ip_address, api_key):
 
     Query the CHECK endpoint and return the "data" dict from the JSON
     response (e.g. abuseConfidenceScore, countryCode, totalReports).
+    Raise requests.HTTPError if AbuseIPDB returns an error status code.
     """
     headers = {
         "Accept": "application/json",
@@ -34,6 +35,7 @@ def check_ip_abuseipdb(ip_address, api_key):
         params=params,
         timeout=10,
     )
+    response.raise_for_status()
     return response.json()["data"]
 
 
@@ -98,7 +100,27 @@ if not api_key:
         "Add your AbuseIPDB API key to .env (see .env.example)."
     )
 
-abuseipdb_result = check_ip_abuseipdb("8.8.8.8", api_key)
+try:
+    abuseipdb_result = check_ip_abuseipdb("8.8.8.8", api_key)
+except requests.HTTPError as error:
+    status_code = error.response.status_code
+    if status_code == 401:
+        sys.exit(
+            "error: AbuseIPDB rejected the API key (HTTP 401). "
+            "Check ABUSEIPDB_API_KEY in .env."
+        )
+    elif status_code == 429:
+        sys.exit(
+            "error: AbuseIPDB daily request limit reached (HTTP 429). "
+            "Try again tomorrow."
+        )
+    elif 500 <= status_code <= 599:
+        sys.exit(
+            f"error: AbuseIPDB server error (HTTP {status_code}). "
+            "Try again later."
+        )
+    else:
+        sys.exit(f"error: AbuseIPDB request failed (HTTP {status_code}).")
 
 checked_ip = abuseipdb_result["ipAddress"]
 abuse_score = abuseipdb_result["abuseConfidenceScore"]
