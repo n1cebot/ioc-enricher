@@ -1,4 +1,4 @@
-"""Command-line interface for extracting IOCs from a text file."""
+"""Extract IOCs from a text file and check public IPs in AbuseIPDB."""
 
 import argparse
 import os
@@ -12,7 +12,11 @@ from enrich import check_ip_abuseipdb
 from extractor import IOC_TYPES, extract_iocs
 
 parser = argparse.ArgumentParser(
-    description="Extract IOCs (IPs, URLs, domains, hashes) from a text file.")
+    description=(
+        "Extract IOCs (IPs, URLs, domains, hashes) from a text file "
+        "and check public IPs in AbuseIPDB."
+    )
+)
 parser.add_argument("input_file", help="path to the input text file")
 parser.add_argument(
     "-t",
@@ -64,6 +68,7 @@ if "hashes" in args.types:
         for hash_value in hashes:
             print(hash_value)
 
+# AbuseIPDB has no reports for non-public IPs; don't waste requests.
 public_ips = [ip for ip in iocs["valid_ips"] if ip.is_global]
 
 if "ips" in args.types and public_ips:
@@ -78,6 +83,8 @@ if "ips" in args.types and public_ips:
     print("\nAbuseIPDB results:")
     start_time = time.perf_counter()
     for ip in public_ips:
+        # 401, 429 and connection errors repeat for every IP, so exit.
+        # Other errors may only affect this IP, so skip it.
         try:
             abuseipdb_result = check_ip_abuseipdb(str(ip), api_key)
         except requests.HTTPError as error:

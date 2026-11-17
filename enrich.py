@@ -3,6 +3,8 @@
 import requests
 
 ABUSEIPDB_CHECK_URL = "https://api.abuseipdb.com/api/v2/check"
+
+# AbuseIPDB defaults to 30 days; 90 gives a longer report history.
 ABUSEIPDB_MAX_AGE_DAYS = 90
 
 
