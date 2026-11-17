@@ -123,18 +123,20 @@ if "ips" in args.types and public_ips:
                     "Try again tomorrow."
                 )
             elif 500 <= status_code <= 599:
-                sys.exit(
-                    f"error: AbuseIPDB server error (HTTP {status_code}). "
-                    "Try again later."
+                print(
+                    f"{ip} --- not checked: AbuseIPDB server error "
+                    f"(HTTP {status_code})"
                 )
+                continue
             else:
-                sys.exit(
-                    f"error: AbuseIPDB request failed (HTTP {status_code})."
+                print(
+                    f"{ip} --- not checked: request failed "
+                    f"(HTTP {status_code})"
                 )
+                continue
         except requests.Timeout:
-            sys.exit(
-                "error: AbuseIPDB did not respond in time. Try again later."
-            )
+            print(f"{ip} --- not checked: no response in time")
+            continue
         except requests.ConnectionError:
             sys.exit(
                 "error: cannot connect to AbuseIPDB. "
