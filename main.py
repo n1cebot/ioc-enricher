@@ -3,6 +3,7 @@
 import argparse
 import os
 import sys
+import time
 
 import requests
 from dotenv import load_dotenv
@@ -107,6 +108,7 @@ if "ips" in args.types and public_ips:
         )
 
     print("\nAbuseIPDB results:")
+    start_time = time.perf_counter()
     for ip in public_ips:
         try:
             abuseipdb_result = check_ip_abuseipdb(str(ip), api_key)
@@ -146,3 +148,6 @@ if "ips" in args.types and public_ips:
         checked_ip = abuseipdb_result["ipAddress"]
         abuse_score = abuseipdb_result["abuseConfidenceScore"]
         print(f"{checked_ip} --- abuse confidence score: {abuse_score}/100")
+
+    elapsed_seconds = time.perf_counter() - start_time
+    print(f"\nAbuseIPDB lookups: {len(public_ips)} in {elapsed_seconds:.2f} s")
