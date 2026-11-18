@@ -2,6 +2,9 @@
 
 import requests
 
+# requests has no default timeout; a dead server could hang the program.
+REQUEST_TIMEOUT_SECONDS = 10
+
 ABUSEIPDB_CHECK_URL = "https://api.abuseipdb.com/api/v2/check"
 
 # AbuseIPDB defaults to 30 days; 90 gives a longer report history.
@@ -31,7 +34,7 @@ def check_ip_abuseipdb(ip_address, api_key):
         ABUSEIPDB_CHECK_URL,
         headers=headers,
         params=params,
-        timeout=10,
+        timeout=REQUEST_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
     return response.json()["data"]

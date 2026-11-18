@@ -73,8 +73,8 @@ public_ips = [ip for ip in iocs["valid_ips"] if ip.is_global]
 
 if "ips" in args.types and public_ips:
     load_dotenv()
-    api_key = os.getenv("ABUSEIPDB_API_KEY")
-    if not api_key:
+    abuseipdb_api_key = os.getenv("ABUSEIPDB_API_KEY")
+    if not abuseipdb_api_key:
         sys.exit(
             "error: ABUSEIPDB_API_KEY is not set. "
             "Add your AbuseIPDB API key to .env (see .env.example)."
@@ -86,7 +86,7 @@ if "ips" in args.types and public_ips:
         # 401, 429 and connection errors repeat for every IP, so exit.
         # Other errors may only affect this IP, so skip it.
         try:
-            abuseipdb_result = check_ip_abuseipdb(str(ip), api_key)
+            abuseipdb_result = check_ip_abuseipdb(str(ip), abuseipdb_api_key)
         except requests.HTTPError as error:
             status_code = error.response.status_code
             if status_code == 401:
