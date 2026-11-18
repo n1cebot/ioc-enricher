@@ -71,15 +71,19 @@ if "hashes" in args.types:
 # AbuseIPDB has no reports for non-public IPs; don't waste requests.
 public_ips = [ip for ip in iocs["valid_ips"] if ip.is_global]
 
-if "ips" in args.types and public_ips:
-    load_dotenv()
-    abuseipdb_api_key = os.getenv("ABUSEIPDB_API_KEY")
-    if not abuseipdb_api_key:
-        sys.exit(
-            "error: ABUSEIPDB_API_KEY is not set. "
-            "Add your AbuseIPDB API key to .env (see .env.example)."
-        )
+load_dotenv()
+abuseipdb_api_key = os.getenv("ABUSEIPDB_API_KEY")
 
+should_check_ips = "ips" in args.types and bool(public_ips)
+
+if should_check_ips and not abuseipdb_api_key:
+    print(
+        "warning: ABUSEIPDB_API_KEY is not set, skipping AbuseIPDB lookups. "
+        "To enable them, add your API key to .env (see .env.example).",
+        file=sys.stderr,
+    )
+
+if should_check_ips and abuseipdb_api_key:
     print("\nAbuseIPDB results:")
     start_time = time.perf_counter()
     for ip in public_ips:
