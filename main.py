@@ -78,11 +78,15 @@ if "hashes" in args.types:
 # Non-public IPs have no reputation data; don't waste requests.
 public_ips = [ip for ip in iocs["valid_ips"] if ip.is_global]
 
+should_check_ips = "ips" in args.types and bool(public_ips)
+
+virustotal_lookups = []
+if should_check_ips:
+    virustotal_lookups += [("ips", str(ip)) for ip in public_ips]
+
 load_dotenv()
 abuseipdb_api_key = os.getenv("ABUSEIPDB_API_KEY")
 virustotal_api_key = os.getenv("VIRUSTOTAL_API_KEY")
-
-should_check_ips = "ips" in args.types and bool(public_ips)
 
 if should_check_ips and not abuseipdb_api_key:
     print(
@@ -139,26 +143,26 @@ if should_check_ips and abuseipdb_api_key:
     elapsed_seconds = time.perf_counter() - start_time
     print(f"\nAbuseIPDB lookups: {len(public_ips)} in {elapsed_seconds:.2f} s")
 
-if should_check_ips and not virustotal_api_key:
+if virustotal_lookups and not virustotal_api_key:
     print(
         "warning: VIRUSTOTAL_API_KEY is not set, skipping VirusTotal lookups. "
         "To enable them, add your API key to .env (see .env.example).",
         file=sys.stderr,
     )
 
-if should_check_ips and virustotal_api_key:
+if virustotal_lookups and virustotal_api_key:
     print("\nVirusTotal results:")
     start_time = time.perf_counter()
-    for index, ip in enumerate(public_ips):
+    for index, (ioc_type, ioc_value) in enumerate(virustotal_lookups):
         if index != 0:
             time.sleep(VIRUSTOTAL_REQUEST_INTERVAL_SECONDS)
 
-        # 401, 429 and connection errors repeat for every IP, so exit.
-        # Other errors may only affect this IP, so skip it.
+        # 401, 429 and connection errors repeat for every IOC, so exit.
+        # Other errors may only affect this IOC, so skip it.
         try:
             virustotal_result = check_virustotal(
-                "ips",
-                str(ip),
+                ioc_type,
+                ioc_value,
                 virustotal_api_key,
             )
         except requests.HTTPError as error:
@@ -176,18 +180,18 @@ if should_check_ips and virustotal_api_key:
                 )
             elif 500 <= status_code <= 599:
                 print(
-                    f"{ip} --- not checked: VirusTotal server error "
+                    f"{ioc_value} --- not checked: VirusTotal server error "
                     f"(HTTP {status_code})"
                 )
                 continue
             else:
                 print(
-                    f"{ip} --- not checked: request failed "
+                    f"{ioc_value} --- not checked: request failed "
                     f"(HTTP {status_code})"
                 )
                 continue
         except requests.Timeout:
-            print(f"{ip} --- not checked: no response in time")
+            print(f"{ioc_value} --- not checked: no response in time")
             continue
         except requests.ConnectionError:
             sys.exit(
@@ -200,11 +204,12 @@ if should_check_ips and virustotal_api_key:
         suspicious_count = analysis_stats["suspicious"]
         engine_count = sum(analysis_stats.values())
         print(
-            f"{ip} --- malicious: {malicious_count}/{engine_count}, "
+            f"{ioc_value} --- malicious: {malicious_count}/{engine_count}, "
             f"suspicious: {suspicious_count}"
         )
 
     elapsed_seconds = time.perf_counter() - start_time
     print(
-        f"\nVirusTotal lookups: {len(public_ips)} in {elapsed_seconds:.2f} s"
+        f"\nVirusTotal lookups: {len(virustotal_lookups)} "
+        f"in {elapsed_seconds:.2f} s"
     )
