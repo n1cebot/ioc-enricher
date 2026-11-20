@@ -1,4 +1,4 @@
-"""Check IP address reputation in AbuseIPDB and VirusTotal."""
+"""Look up IOC reputation in AbuseIPDB and VirusTotal."""
 
 import requests
 
@@ -10,7 +10,14 @@ ABUSEIPDB_CHECK_URL = "https://api.abuseipdb.com/api/v2/check"
 # AbuseIPDB defaults to 30 days; 90 gives a longer report history.
 ABUSEIPDB_MAX_AGE_DAYS = 90
 
-VIRUSTOTAL_IP_ADDRESSES_URL = "https://www.virustotal.com/api/v3/ip_addresses"
+VIRUSTOTAL_BASE_URL = "https://www.virustotal.com/api/v3"
+
+# Keys are IOC_TYPES names; values are VirusTotal collection names.
+VIRUSTOTAL_COLLECTIONS = {
+    "ips": "ip_addresses",
+    "domains": "domains",
+    "hashes": "files",
+}
 
 # The free API allows 4 requests per minute; 60 s / 4 = 15 s.
 VIRUSTOTAL_REQUEST_INTERVAL_SECONDS = 15
@@ -45,23 +52,29 @@ def check_ip_abuseipdb(ip_address, api_key):
     return response.json()["data"]
 
 
-def check_ip_virustotal(ip_address, api_key):
-    """Look up an IP address in VirusTotal and return its attributes.
+def check_virustotal(ioc_type, ioc_value, api_key):
+    """Look up an IOC in VirusTotal and return its attributes.
 
-    Query the IP address endpoint and return the "attributes" dict from
-    the JSON response (e.g. last_analysis_stats, reputation, country).
+    Map ioc_type (a key of VIRUSTOTAL_COLLECTIONS, e.g. "ips") to a
+    VirusTotal collection, query it for ioc_value and return the
+    "attributes" dict from the JSON response (e.g. last_analysis_stats,
+    reputation).
 
-    Raise requests.HTTPError for an error status code,
-    requests.ConnectionError if VirusTotal cannot be reached, and
-    requests.Timeout if it does not respond in time.
+    Raise KeyError for an unsupported ioc_type, requests.HTTPError
+    for an error status code, requests.ConnectionError if VirusTotal
+    cannot be reached, and requests.Timeout if it does not respond in
+    time.
     """
+    collection = VIRUSTOTAL_COLLECTIONS[ioc_type]
+    url = f"{VIRUSTOTAL_BASE_URL}/{collection}/{ioc_value}"
+
     headers = {
         "Accept": "application/json",
         "x-apikey": api_key,
     }
 
     response = requests.get(
-        f"{VIRUSTOTAL_IP_ADDRESSES_URL}/{ip_address}",
+        url,
         headers=headers,
         timeout=REQUEST_TIMEOUT_SECONDS,
     )

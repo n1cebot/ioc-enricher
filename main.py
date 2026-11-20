@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from enrich import (
     VIRUSTOTAL_REQUEST_INTERVAL_SECONDS,
     check_ip_abuseipdb,
-    check_ip_virustotal,
+    check_virustotal,
 )
 from extractor import IOC_TYPES, extract_iocs
 
@@ -156,7 +156,8 @@ if should_check_ips and virustotal_api_key:
         # 401, 429 and connection errors repeat for every IP, so exit.
         # Other errors may only affect this IP, so skip it.
         try:
-            virustotal_result = check_ip_virustotal(
+            virustotal_result = check_virustotal(
+                "ips",
                 str(ip),
                 virustotal_api_key,
             )
