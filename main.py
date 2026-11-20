@@ -1,4 +1,8 @@
-"""Extract IOCs and check public IPs in AbuseIPDB and VirusTotal."""
+"""Extract IOCs from a text file and look up their reputation.
+
+Public IPs are checked in AbuseIPDB and VirusTotal, domains in
+VirusTotal.
+"""
 
 import argparse
 import os
@@ -17,8 +21,9 @@ from extractor import IOC_TYPES, extract_iocs
 
 parser = argparse.ArgumentParser(
     description=(
-        "Extract IOCs (IPs, URLs, domains, hashes) from a text file "
-        "and check public IPs in AbuseIPDB and VirusTotal."
+        "Extract IOCs (IPs, URLs, domains, hashes) from a text file. "
+        "Public IPs are checked in AbuseIPDB and VirusTotal, "
+        "domains in VirusTotal."
     )
 )
 parser.add_argument("input_file", help="path to the input text file")
@@ -31,7 +36,7 @@ parser.add_argument(
     metavar="TYPE",
     help=(
         f"IOC types to show: {', '.join(IOC_TYPES)} (default: all); "
-        "with ips, public IPs are also checked in AbuseIPDB and VirusTotal"
+        "selected ips and domains are also looked up online"
     ),
 )
 args = parser.parse_args()
@@ -83,6 +88,8 @@ should_check_ips = "ips" in args.types and bool(public_ips)
 virustotal_lookups = []
 if should_check_ips:
     virustotal_lookups += [("ips", str(ip)) for ip in public_ips]
+if "domains" in args.types:
+    virustotal_lookups += [("domains", domain) for domain in iocs["domains"]]
 
 load_dotenv()
 abuseipdb_api_key = os.getenv("ABUSEIPDB_API_KEY")
@@ -172,6 +179,9 @@ if virustotal_lookups and virustotal_api_key:
                     "error: VirusTotal rejected the API key (HTTP 401). "
                     "Check VIRUSTOTAL_API_KEY in .env."
                 )
+            elif status_code == 404:
+                print(f"{ioc_value} --- not found in VirusTotal")
+                continue
             elif status_code == 429:
                 sys.exit(
                     "error: VirusTotal request limit reached (HTTP 429). "
