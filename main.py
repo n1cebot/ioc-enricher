@@ -8,7 +8,11 @@ import time
 import requests
 from dotenv import load_dotenv
 
-from enrich import check_ip_abuseipdb, check_ip_virustotal
+from enrich import (
+    VIRUSTOTAL_REQUEST_INTERVAL_SECONDS,
+    check_ip_abuseipdb,
+    check_ip_virustotal,
+)
 from extractor import IOC_TYPES, extract_iocs
 
 parser = argparse.ArgumentParser(
@@ -145,7 +149,10 @@ if should_check_ips and not virustotal_api_key:
 if should_check_ips and virustotal_api_key:
     print("\nVirusTotal results:")
     start_time = time.perf_counter()
-    for ip in public_ips:
+    for index, ip in enumerate(public_ips):
+        if index != 0:
+            time.sleep(VIRUSTOTAL_REQUEST_INTERVAL_SECONDS)
+
         # 401, 429 and connection errors repeat for every IP, so exit.
         # Other errors may only affect this IP, so skip it.
         try:
@@ -163,8 +170,8 @@ if should_check_ips and virustotal_api_key:
             elif status_code == 429:
                 sys.exit(
                     "error: VirusTotal request limit reached (HTTP 429). "
-                    "Free API limits: 4 requests per minute, 500 per day. "
-                    "Wait a minute or try again tomorrow."
+                    "The daily limit (500) is probably used up. "
+                    "Try again tomorrow."
                 )
             elif 500 <= status_code <= 599:
                 print(

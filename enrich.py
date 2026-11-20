@@ -12,6 +12,9 @@ ABUSEIPDB_MAX_AGE_DAYS = 90
 
 VIRUSTOTAL_IP_ADDRESSES_URL = "https://www.virustotal.com/api/v3/ip_addresses"
 
+# The free API allows 4 requests per minute; 60 s / 4 = 15 s.
+VIRUSTOTAL_REQUEST_INTERVAL_SECONDS = 15
+
 
 def check_ip_abuseipdb(ip_address, api_key):
     """Look up an IP address in AbuseIPDB and return the report data.
