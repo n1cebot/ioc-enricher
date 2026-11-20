@@ -1,7 +1,7 @@
 """Extract IOCs from a text file and look up their reputation.
 
-Public IPs are checked in AbuseIPDB and VirusTotal, domains in
-VirusTotal.
+Public IPs are checked in AbuseIPDB and VirusTotal, domains and
+hashes in VirusTotal.
 """
 
 import argparse
@@ -21,9 +21,9 @@ from extractor import IOC_TYPES, extract_iocs
 
 parser = argparse.ArgumentParser(
     description=(
-        "Extract IOCs (IPs, URLs, domains, hashes) from a text file. "
+        "Extract IOCs (IPs, URLs, domains, and hashes) from a text file. "
         "Public IPs are checked in AbuseIPDB and VirusTotal, "
-        "domains in VirusTotal."
+        "domains and hashes in VirusTotal."
     )
 )
 parser.add_argument("input_file", help="path to the input text file")
@@ -36,7 +36,7 @@ parser.add_argument(
     metavar="TYPE",
     help=(
         f"IOC types to show: {', '.join(IOC_TYPES)} (default: all); "
-        "selected ips and domains are also looked up online"
+        "selected ips, domains, and hashes are also looked up online"
     ),
 )
 args = parser.parse_args()
@@ -90,6 +90,9 @@ if should_check_ips:
     virustotal_lookups += [("ips", str(ip)) for ip in public_ips]
 if "domains" in args.types:
     virustotal_lookups += [("domains", domain) for domain in iocs["domains"]]
+if "hashes" in args.types:
+    for hashes in iocs["hashes"].values():
+        virustotal_lookups += [("hashes", hash_value) for hash_value in hashes]
 
 load_dotenv()
 abuseipdb_api_key = os.getenv("ABUSEIPDB_API_KEY")
