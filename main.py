@@ -1,7 +1,7 @@
 """Extract IOCs from a text file and look up their reputation.
 
-Public IPs are checked in AbuseIPDB and VirusTotal, domains and
-hashes in VirusTotal.
+Public IPs are checked in AbuseIPDB and VirusTotal. URLs, domains, and
+hashes are checked in VirusTotal only.
 """
 
 import argparse
@@ -22,8 +22,8 @@ from extractor import IOC_TYPES, extract_iocs
 parser = argparse.ArgumentParser(
     description=(
         "Extract IOCs (IPs, URLs, domains, and hashes) from a text file. "
-        "Public IPs are checked in AbuseIPDB and VirusTotal, "
-        "domains and hashes in VirusTotal."
+        "Public IPs are checked in AbuseIPDB and VirusTotal. "
+        "URLs, domains, and hashes are checked in VirusTotal only."
     )
 )
 parser.add_argument("input_file", help="path to the input text file")
@@ -34,10 +34,7 @@ parser.add_argument(
     choices=IOC_TYPES,
     default=IOC_TYPES,
     metavar="TYPE",
-    help=(
-        f"IOC types to show: {', '.join(IOC_TYPES)} (default: all); "
-        "selected ips, domains, and hashes are also looked up online"
-    ),
+    help=f"IOC types to show and check: {', '.join(IOC_TYPES)} (default: all)",
 )
 args = parser.parse_args()
 
@@ -88,6 +85,8 @@ should_check_ips = "ips" in args.types and bool(public_ips)
 virustotal_lookups = []
 if should_check_ips:
     virustotal_lookups += [("ips", str(ip)) for ip in public_ips]
+if "urls" in args.types:
+    virustotal_lookups += [("urls", url) for url in iocs["urls"]]
 if "domains" in args.types:
     virustotal_lookups += [("domains", domain) for domain in iocs["domains"]]
 if "hashes" in args.types:

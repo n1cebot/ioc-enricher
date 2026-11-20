@@ -1,5 +1,7 @@
 """Look up IOC reputation in AbuseIPDB and VirusTotal."""
 
+import base64
+
 import requests
 
 # requests has no default timeout; a dead server could hang the program.
@@ -15,6 +17,7 @@ VIRUSTOTAL_BASE_URL = "https://www.virustotal.com/api/v3"
 # Keys are IOC_TYPES names; values are VirusTotal collection names.
 VIRUSTOTAL_COLLECTIONS = {
     "ips": "ip_addresses",
+    "urls": "urls",
     "domains": "domains",
     "hashes": "files",
 }
@@ -56,17 +59,24 @@ def check_virustotal(ioc_type, ioc_value, api_key):
     """Look up an IOC in VirusTotal and return its attributes.
 
     Map ioc_type (a key of VIRUSTOTAL_COLLECTIONS, e.g. "ips") to a
-    VirusTotal collection, query it for ioc_value and return the
-    "attributes" dict from the JSON response (e.g. last_analysis_stats,
-    reputation).
+    VirusTotal collection, query it for ioc_value (URLs are encoded as
+    VirusTotal identifiers first) and return the "attributes" dict
+    from the JSON response (e.g. last_analysis_stats, reputation).
 
     Raise KeyError for an unsupported ioc_type, requests.HTTPError
     for an error status code, requests.ConnectionError if VirusTotal
     cannot be reached, and requests.Timeout if it does not respond in
     time.
     """
+    # VirusTotal identifies URLs by unpadded URL-safe base64.
+    if ioc_type == "urls":
+        encoded_url = base64.urlsafe_b64encode(ioc_value.encode())
+        ioc_id = encoded_url.decode().rstrip("=")
+    else:
+        ioc_id = ioc_value
+
     collection = VIRUSTOTAL_COLLECTIONS[ioc_type]
-    url = f"{VIRUSTOTAL_BASE_URL}/{collection}/{ioc_value}"
+    url = f"{VIRUSTOTAL_BASE_URL}/{collection}/{ioc_id}"
 
     headers = {
         "Accept": "application/json",
