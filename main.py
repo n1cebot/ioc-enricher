@@ -1,4 +1,8 @@
-"""Extract IOCs from a text file and check public IPs in AbuseIPDB."""
+"""Extract IOCs from a text file and look up their reputation.
+
+Public IPs are checked in AbuseIPDB and VirusTotal. URLs, domains, and
+hashes are checked in VirusTotal only.
+"""
 
 import argparse
 import os
@@ -8,13 +12,18 @@ import time
 import requests
 from dotenv import load_dotenv
 
-from enrich import check_ip_abuseipdb
+from enrich import (
+    VIRUSTOTAL_REQUEST_INTERVAL_SECONDS,
+    check_ip_abuseipdb,
+    check_virustotal,
+)
 from extractor import IOC_TYPES, extract_iocs
 
 parser = argparse.ArgumentParser(
     description=(
-        "Extract IOCs (IPs, URLs, domains, hashes) from a text file "
-        "and check public IPs in AbuseIPDB."
+        "Extract IOCs (IPs, URLs, domains, and hashes) from a text file. "
+        "Public IPs are checked in AbuseIPDB and VirusTotal. "
+        "URLs, domains, and hashes are checked in VirusTotal only."
     )
 )
 parser.add_argument("input_file", help="path to the input text file")
@@ -25,7 +34,7 @@ parser.add_argument(
     choices=IOC_TYPES,
     default=IOC_TYPES,
     metavar="TYPE",
-    help=f"IOC types to show: {', '.join(IOC_TYPES)} (default: all)",
+    help=f"IOC types to show and check: {', '.join(IOC_TYPES)} (default: all)",
 )
 args = parser.parse_args()
 
@@ -68,25 +77,41 @@ if "hashes" in args.types:
         for hash_value in hashes:
             print(hash_value)
 
-# AbuseIPDB has no reports for non-public IPs; don't waste requests.
+# Non-public IPs have no reputation data; don't waste requests.
 public_ips = [ip for ip in iocs["valid_ips"] if ip.is_global]
 
-if "ips" in args.types and public_ips:
-    load_dotenv()
-    api_key = os.getenv("ABUSEIPDB_API_KEY")
-    if not api_key:
-        sys.exit(
-            "error: ABUSEIPDB_API_KEY is not set. "
-            "Add your AbuseIPDB API key to .env (see .env.example)."
-        )
+should_check_ips = "ips" in args.types and bool(public_ips)
 
+virustotal_lookups = []
+if should_check_ips:
+    virustotal_lookups += [("ips", str(ip)) for ip in public_ips]
+if "urls" in args.types:
+    virustotal_lookups += [("urls", url) for url in iocs["urls"]]
+if "domains" in args.types:
+    virustotal_lookups += [("domains", domain) for domain in iocs["domains"]]
+if "hashes" in args.types:
+    for hashes in iocs["hashes"].values():
+        virustotal_lookups += [("hashes", hash_value) for hash_value in hashes]
+
+load_dotenv()
+abuseipdb_api_key = os.getenv("ABUSEIPDB_API_KEY")
+virustotal_api_key = os.getenv("VIRUSTOTAL_API_KEY")
+
+if should_check_ips and not abuseipdb_api_key:
+    print(
+        "warning: ABUSEIPDB_API_KEY is not set, skipping AbuseIPDB lookups. "
+        "To enable them, add your API key to .env (see .env.example).",
+        file=sys.stderr,
+    )
+
+if should_check_ips and abuseipdb_api_key:
     print("\nAbuseIPDB results:")
     start_time = time.perf_counter()
     for ip in public_ips:
         # 401, 429 and connection errors repeat for every IP, so exit.
         # Other errors may only affect this IP, so skip it.
         try:
-            abuseipdb_result = check_ip_abuseipdb(str(ip), api_key)
+            abuseipdb_result = check_ip_abuseipdb(str(ip), abuseipdb_api_key)
         except requests.HTTPError as error:
             status_code = error.response.status_code
             if status_code == 401:
@@ -126,3 +151,77 @@ if "ips" in args.types and public_ips:
 
     elapsed_seconds = time.perf_counter() - start_time
     print(f"\nAbuseIPDB lookups: {len(public_ips)} in {elapsed_seconds:.2f} s")
+
+if virustotal_lookups and not virustotal_api_key:
+    print(
+        "warning: VIRUSTOTAL_API_KEY is not set, skipping VirusTotal lookups. "
+        "To enable them, add your API key to .env (see .env.example).",
+        file=sys.stderr,
+    )
+
+if virustotal_lookups and virustotal_api_key:
+    print("\nVirusTotal results:")
+    start_time = time.perf_counter()
+    for index, (ioc_type, ioc_value) in enumerate(virustotal_lookups):
+        if index != 0:
+            time.sleep(VIRUSTOTAL_REQUEST_INTERVAL_SECONDS)
+
+        # 401, 429 and connection errors repeat for every IOC, so exit.
+        # Other errors may only affect this IOC, so skip it.
+        try:
+            virustotal_result = check_virustotal(
+                ioc_type,
+                ioc_value,
+                virustotal_api_key,
+            )
+        except requests.HTTPError as error:
+            status_code = error.response.status_code
+            if status_code == 401:
+                sys.exit(
+                    "error: VirusTotal rejected the API key (HTTP 401). "
+                    "Check VIRUSTOTAL_API_KEY in .env."
+                )
+            elif status_code == 404:
+                print(f"{ioc_value} --- not found in VirusTotal")
+                continue
+            elif status_code == 429:
+                sys.exit(
+                    "error: VirusTotal request limit reached (HTTP 429). "
+                    "The daily limit (500) is probably used up. "
+                    "Try again tomorrow."
+                )
+            elif 500 <= status_code <= 599:
+                print(
+                    f"{ioc_value} --- not checked: VirusTotal server error "
+                    f"(HTTP {status_code})"
+                )
+                continue
+            else:
+                print(
+                    f"{ioc_value} --- not checked: request failed "
+                    f"(HTTP {status_code})"
+                )
+                continue
+        except requests.Timeout:
+            print(f"{ioc_value} --- not checked: no response in time")
+            continue
+        except requests.ConnectionError:
+            sys.exit(
+                "error: cannot connect to VirusTotal. "
+                "Check your internet connection."
+            )
+
+        analysis_stats = virustotal_result["last_analysis_stats"]
+        malicious_count = analysis_stats["malicious"]
+        suspicious_count = analysis_stats["suspicious"]
+        engine_count = sum(analysis_stats.values())
+        print(
+            f"{ioc_value} --- malicious: {malicious_count}/{engine_count}, "
+            f"suspicious: {suspicious_count}"
+        )
+
+    elapsed_seconds = time.perf_counter() - start_time
+    print(
+        f"\nVirusTotal lookups: {len(virustotal_lookups)} "
+        f"in {elapsed_seconds:.2f} s"
+    )
