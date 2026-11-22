@@ -174,9 +174,11 @@ if virustotal_lookups and not virustotal_api_key:
 if virustotal_lookups and virustotal_api_key:
     print("\nVirusTotal results:")
     start_time = time.perf_counter()
-    for index, (ioc_type, ioc_value) in enumerate(virustotal_lookups):
-        if index != 0:
+    requests_sent = 0
+    for ioc_type, ioc_value in virustotal_lookups:
+        if requests_sent > 0:
             time.sleep(VIRUSTOTAL_REQUEST_INTERVAL_SECONDS)
+        requests_sent += 1
 
         # 401, 429 and connection errors repeat for every IOC, so exit.
         # Other errors may only affect this IOC, so skip it.
