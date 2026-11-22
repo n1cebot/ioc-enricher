@@ -8,6 +8,7 @@ import argparse
 import os
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import requests
 from dotenv import load_dotenv
@@ -18,6 +19,9 @@ from enrich import (
     check_virustotal,
 )
 from extractor import IOC_TYPES, extract_iocs
+
+# AbuseIPDB documents no per-minute limit; a few threads are enough.
+ABUSEIPDB_MAX_WORKERS = 5
 
 parser = argparse.ArgumentParser(
     description=(
@@ -107,11 +111,19 @@ if should_check_ips and not abuseipdb_api_key:
 if should_check_ips and abuseipdb_api_key:
     print("\nAbuseIPDB results:")
     start_time = time.perf_counter()
-    for ip in public_ips:
+
+    # Requests run in threads; their errors are raised by result() below.
+    with ThreadPoolExecutor(max_workers=ABUSEIPDB_MAX_WORKERS) as executor:
+        futures = [
+            executor.submit(check_ip_abuseipdb, str(ip), abuseipdb_api_key)
+            for ip in public_ips
+        ]
+
+    for ip, future in zip(public_ips, futures):
         # 401, 429 and connection errors repeat for every IP, so exit.
         # Other errors may only affect this IP, so skip it.
         try:
-            abuseipdb_result = check_ip_abuseipdb(str(ip), abuseipdb_api_key)
+            abuseipdb_result = future.result()
         except requests.HTTPError as error:
             status_code = error.response.status_code
             if status_code == 401:
