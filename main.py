@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 import requests
 from dotenv import load_dotenv
 
+from cache import current_timestamp, load_cache, save_cache
 from enrich import (
     VIRUSTOTAL_REQUEST_INTERVAL_SECONDS,
     check_ip_abuseipdb,
@@ -101,6 +102,8 @@ load_dotenv()
 abuseipdb_api_key = os.getenv("ABUSEIPDB_API_KEY")
 virustotal_api_key = os.getenv("VIRUSTOTAL_API_KEY")
 
+cache = load_cache()
+
 if should_check_ips and not abuseipdb_api_key:
     print(
         "warning: ABUSEIPDB_API_KEY is not set, skipping AbuseIPDB lookups. "
@@ -173,9 +176,12 @@ if virustotal_lookups and not virustotal_api_key:
 
 if virustotal_lookups and virustotal_api_key:
     print("\nVirusTotal results:")
-    start_time = time.perf_counter()
+    virustotal_cache = cache.setdefault("virustotal", {})
     requests_sent = 0
+    start_time = time.perf_counter()
     for ioc_type, ioc_value in virustotal_lookups:
+        type_cache = virustotal_cache.setdefault(ioc_type, {})
+
         if requests_sent > 0:
             time.sleep(VIRUSTOTAL_REQUEST_INTERVAL_SECONDS)
         requests_sent += 1
@@ -196,8 +202,7 @@ if virustotal_lookups and virustotal_api_key:
                     "Check VIRUSTOTAL_API_KEY in .env."
                 )
             elif status_code == 404:
-                print(f"{ioc_value} --- not found in VirusTotal")
-                continue
+                analysis_stats = None
             elif status_code == 429:
                 sys.exit(
                     "error: VirusTotal request limit reached (HTTP 429). "
@@ -224,8 +229,20 @@ if virustotal_lookups and virustotal_api_key:
                 "error: cannot connect to VirusTotal. "
                 "Check your internet connection."
             )
+        else:
+            analysis_stats = virustotal_result["last_analysis_stats"]
 
-        analysis_stats = virustotal_result["last_analysis_stats"]
+        # Errors never get here; only results and "not found" are cached.
+        type_cache[ioc_value] = {
+            "analysis_stats": analysis_stats,
+            "checked_at": current_timestamp(),
+        }
+        save_cache(cache)
+
+        if analysis_stats is None:
+            print(f"{ioc_value} --- not found in VirusTotal")
+            continue
+
         malicious_count = analysis_stats["malicious"]
         suspicious_count = analysis_stats["suspicious"]
         engine_count = sum(analysis_stats.values())
