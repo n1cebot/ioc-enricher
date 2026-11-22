@@ -24,6 +24,25 @@ from extractor import IOC_TYPES, extract_iocs
 # AbuseIPDB documents no per-minute limit; a few threads are enough.
 ABUSEIPDB_MAX_WORKERS = 5
 
+
+def print_virustotal_result(ioc_value, analysis_stats):
+    """Print the VirusTotal result line for one IOC.
+
+    Print "not found in VirusTotal" if analysis_stats is None.
+    """
+    if analysis_stats is None:
+        print(f"{ioc_value} --- not found in VirusTotal")
+        return
+
+    malicious_count = analysis_stats["malicious"]
+    suspicious_count = analysis_stats["suspicious"]
+    engine_count = sum(analysis_stats.values())
+    print(
+        f"{ioc_value} --- malicious: {malicious_count}/{engine_count}, "
+        f"suspicious: {suspicious_count}"
+    )
+
+
 parser = argparse.ArgumentParser(
     description=(
         "Extract IOCs (IPs, URLs, domains, and hashes) from a text file. "
@@ -239,17 +258,7 @@ if virustotal_lookups and virustotal_api_key:
         }
         save_cache(cache)
 
-        if analysis_stats is None:
-            print(f"{ioc_value} --- not found in VirusTotal")
-            continue
-
-        malicious_count = analysis_stats["malicious"]
-        suspicious_count = analysis_stats["suspicious"]
-        engine_count = sum(analysis_stats.values())
-        print(
-            f"{ioc_value} --- malicious: {malicious_count}/{engine_count}, "
-            f"suspicious: {suspicious_count}"
-        )
+        print_virustotal_result(ioc_value, analysis_stats)
 
     elapsed_seconds = time.perf_counter() - start_time
     print(
