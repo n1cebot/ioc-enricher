@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 import requests
 from dotenv import load_dotenv
 
-from cache import current_timestamp, load_cache, save_cache
+from cache import current_timestamp, is_fresh, load_cache, save_cache
 from enrich import (
     VIRUSTOTAL_REQUEST_INTERVAL_SECONDS,
     check_ip_abuseipdb,
@@ -25,13 +25,16 @@ from extractor import IOC_TYPES, extract_iocs
 ABUSEIPDB_MAX_WORKERS = 5
 
 
-def print_virustotal_result(ioc_value, analysis_stats):
+def print_virustotal_result(ioc_value, analysis_stats, cached=False):
     """Print the VirusTotal result line for one IOC.
 
-    Print "not found in VirusTotal" if analysis_stats is None.
+    Print "not found in VirusTotal" if analysis_stats is None. Mark the
+    line with "(cached)" if cached is True.
     """
+    cache_note = " (cached)" if cached else ""
+
     if analysis_stats is None:
-        print(f"{ioc_value} --- not found in VirusTotal")
+        print(f"{ioc_value} --- not found in VirusTotal{cache_note}")
         return
 
     malicious_count = analysis_stats["malicious"]
@@ -39,7 +42,7 @@ def print_virustotal_result(ioc_value, analysis_stats):
     engine_count = sum(analysis_stats.values())
     print(
         f"{ioc_value} --- malicious: {malicious_count}/{engine_count}, "
-        f"suspicious: {suspicious_count}"
+        f"suspicious: {suspicious_count}{cache_note}"
     )
 
 
@@ -200,6 +203,16 @@ if virustotal_lookups and virustotal_api_key:
     start_time = time.perf_counter()
     for ioc_type, ioc_value in virustotal_lookups:
         type_cache = virustotal_cache.setdefault(ioc_type, {})
+
+        # A fresh cached result skips both the request and the wait.
+        cached_entry = type_cache.get(ioc_value)
+        if cached_entry is not None and is_fresh(cached_entry["checked_at"]):
+            print_virustotal_result(
+                ioc_value,
+                cached_entry["analysis_stats"],
+                cached=True,
+            )
+            continue
 
         if requests_sent > 0:
             time.sleep(VIRUSTOTAL_REQUEST_INTERVAL_SECONDS)
