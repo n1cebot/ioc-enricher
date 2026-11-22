@@ -4,26 +4,26 @@ A command-line tool that extracts Indicators of Compromise (IOCs) from text and 
 
 I'm building it as a learning project to practice Python and Git on a problem that comes up in Blue Team work: IOCs in reports and emails are often defanged (e.g. `hxxp://evil[.]com`), so they can't be pasted straight into other tools, and each one still has to be checked by hand.
 
-> **Status:** work in progress after v0.2. IOC extraction, AbuseIPDB lookups for public IPv4 addresses, and VirusTotal lookups for all IOC types work. Parallel lookups, caching, and saving results to a file are not implemented yet.
+> **Status:** work in progress after v0.2. IOC extraction, AbuseIPDB lookups for public IPv4 addresses, and VirusTotal lookups for all IOC types work. Caching and saving results to a file are not implemented yet.
 
 ## What it does
 
-- Extracts IPv4 addresses, URLs, domains, and file hashes (MD5, SHA1, SHA256) from a text file
-- Refangs defanged indicators before extraction (`hxxp`, `[.]`, `[:]`)
-- Validates IPv4 addresses and labels them as public or non-public (private, loopback, documentation ranges)
-- Skips matches that look like file names (e.g. `report.pdf`) in domain results
-- Removes duplicates and sorts the results
-- Checks public IPv4 addresses in AbuseIPDB and shows their abuse confidence score (0-100), based on reports from the last 90 days
+- Extracts IPv4 addresses, URLs, domains, and file hashes (MD5, SHA1, SHA256) from a text file.
+- Refangs defanged indicators before extraction (`hxxp`, `[.]`, `[:]`).
+- Validates IPv4 addresses and labels them as public or non-public (private, loopback, documentation ranges).
+- Skips matches that look like file names (e.g. `report.pdf`) in domain results.
+- Removes duplicates and sorts the results.
+- Checks public IPv4 addresses in AbuseIPDB and shows their abuse confidence score (0-100), based on reports from the last 90 days. Up to 5 addresses are checked at the same time.
 - Checks public IPv4 addresses, URLs, domains, and hashes in VirusTotal and shows how many engines flagged each one as malicious (out of all engines that analyzed it) and how many as suspicious. IOCs that VirusTotal has no data on are reported as "not found in VirusTotal".
-- Waits 15 seconds between VirusTotal requests to stay within the free API limit of 4 requests per minute
-- Non-public IP addresses are not sent to either API
+- Waits 15 seconds between VirusTotal requests to stay within the free API limit of 4 requests per minute.
+- Non-public IP addresses are not sent to either API.
 - If an API key is missing, prints a warning and skips that service. Stops with a clear message if a key is rejected, the daily limit is reached, or there is no connection. If a single lookup fails (server error, timeout), that IOC is marked as not checked and the rest are still checked.
-- Shows how long the lookups took
+- Shows how long the lookups took.
 
 ## Requirements
 
-- Python 3 (tested with Python 3.14)
-- The packages in `requirements.txt` (`requests`, `python-dotenv`)
+- Python 3 (tested with Python 3.14).
+- The packages in `requirements.txt` (`requests`, `python-dotenv`).
 - Optional: a free [AbuseIPDB](https://www.abuseipdb.com/) account and API key. The free plan allows 1,000 checks per day.
 - Optional: a free [VirusTotal](https://www.virustotal.com/) account and API key. The free public API allows 4 requests per minute and 500 per day and must not be used in commercial products or services.
 
@@ -76,7 +76,7 @@ python main.py sample.txt --types ips hashes
 
 Available types: `ips`, `urls`, `domains`, `hashes`. Run `python main.py -h` for all options.
 
-Only the selected types are looked up. Public IPs are checked in AbuseIPDB and VirusTotal; URLs, domains, and hashes only in VirusTotal.
+Only the selected types are looked up. Public IPs are checked in AbuseIPDB and VirusTotal. URLs, domains, and hashes are checked in VirusTotal only.
 
 Because of the 15-second wait, VirusTotal lookups take about 15 seconds per IOC. A full run on `sample.txt` sends 17 requests to VirusTotal and takes about 4 minutes, so `--types` is useful for quick checks.
 
@@ -145,5 +145,5 @@ A few things to keep in mind when reading the results:
 
 ## Planned
 
-- Run lookups in parallel and cache results to avoid repeated requests
+- Cache results to avoid repeated requests
 - Save results to JSON or CSV
