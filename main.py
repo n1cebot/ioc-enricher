@@ -135,6 +135,8 @@ if should_check_ips and not abuseipdb_api_key:
 
 if should_check_ips and abuseipdb_api_key:
     print("\nAbuseIPDB results:")
+    abuseipdb_cache = cache.setdefault("abuseipdb", {})
+    abuseipdb_ip_cache = abuseipdb_cache.setdefault("ips", {})
     start_time = time.perf_counter()
 
     # Requests run in threads; their errors are raised by result() below.
@@ -184,6 +186,14 @@ if should_check_ips and abuseipdb_api_key:
 
         checked_ip = abuseipdb_result["ipAddress"]
         abuse_score = abuseipdb_result["abuseConfidenceScore"]
+
+        # Errors never get here; only results are cached.
+        abuseipdb_ip_cache[str(ip)] = {
+            "abuse_confidence_score": abuse_score,
+            "checked_at": current_timestamp(),
+        }
+        save_cache(cache)
+
         print(f"{checked_ip} --- abuse confidence score: {abuse_score}/100")
 
     elapsed_seconds = time.perf_counter() - start_time
