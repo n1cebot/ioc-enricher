@@ -169,6 +169,7 @@ if should_check_ips and abuseipdb_api_key:
             for ip in ips_to_check
         }
 
+    abuseipdb_error_reported = False
     for ip in public_ips:
         if ip in fresh_entries:
             print_abuseipdb_result(
@@ -178,7 +179,7 @@ if should_check_ips and abuseipdb_api_key:
             )
             continue
 
-        # 401 and 429 repeat for every IP, so stop AbuseIPDB lookups.
+        # 401 and 429 repeat for every IP; explain them only once.
         # A connection error likely affects VirusTotal too, so exit.
         # Other errors may only affect this IP, so skip it.
         try:
@@ -186,21 +187,25 @@ if should_check_ips and abuseipdb_api_key:
         except requests.HTTPError as error:
             status_code = error.response.status_code
             if status_code == 401:
-                print(
-                    "error: AbuseIPDB rejected the API key (HTTP 401). "
-                    "Check ABUSEIPDB_API_KEY in .env. "
-                    "Skipping the remaining AbuseIPDB lookups.",
-                    file=sys.stderr,
-                )
-                break
+                if not abuseipdb_error_reported:
+                    print(
+                        "error: AbuseIPDB rejected the API key (HTTP 401). "
+                        "Check ABUSEIPDB_API_KEY in .env.",
+                        file=sys.stderr,
+                    )
+                    abuseipdb_error_reported = True
+                print(f"{ip} --- not checked: API key rejected (HTTP 401)")
+                continue
             elif status_code == 429:
-                print(
-                    "error: AbuseIPDB daily request limit reached (HTTP 429). "
-                    "Try again tomorrow. "
-                    "Skipping the remaining AbuseIPDB lookups.",
-                    file=sys.stderr,
-                )
-                break
+                if not abuseipdb_error_reported:
+                    print(
+                        "error: AbuseIPDB daily request limit reached "
+                        "(HTTP 429). Try again tomorrow.",
+                        file=sys.stderr,
+                    )
+                    abuseipdb_error_reported = True
+                print(f"{ip} --- not checked: daily limit reached (HTTP 429)")
+                continue
             elif 500 <= status_code <= 599:
                 print(
                     f"{ip} --- not checked: AbuseIPDB server error "
