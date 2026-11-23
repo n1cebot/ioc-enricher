@@ -118,13 +118,13 @@ if "hashes" in args.types:
             print(hash_value)
 
 # Non-public IPs have no reputation data; don't waste requests.
-public_ips = [ip for ip in iocs["valid_ips"] if ip.is_global]
+public_ips = [str(ip) for ip in iocs["valid_ips"] if ip.is_global]
 
 should_check_ips = "ips" in args.types and bool(public_ips)
 
 virustotal_lookups = []
 if should_check_ips:
-    virustotal_lookups += [("ips", str(ip)) for ip in public_ips]
+    virustotal_lookups += [("ips", ip) for ip in public_ips]
 if "urls" in args.types:
     virustotal_lookups += [("urls", url) for url in iocs["urls"]]
 if "domains" in args.types:
@@ -156,11 +156,11 @@ if should_check_ips and abuseipdb_api_key:
     fresh_entries = {}
     ips_to_check = []
     for ip in public_ips:
-        cached_entry = abuseipdb_ip_cache.get(str(ip))
+        cached_entry = abuseipdb_ip_cache.get(ip)
         if cached_entry is not None and is_fresh(cached_entry["checked_at"]):
-            fresh_entries[str(ip)] = cached_entry
+            fresh_entries[ip] = cached_entry
         else:
-            ips_to_check.append(str(ip))
+            ips_to_check.append(ip)
 
     # Requests run in threads; their errors are raised by result() below.
     with ThreadPoolExecutor(max_workers=ABUSEIPDB_MAX_WORKERS) as executor:
@@ -170,10 +170,10 @@ if should_check_ips and abuseipdb_api_key:
         }
 
     for ip in public_ips:
-        if str(ip) in fresh_entries:
+        if ip in fresh_entries:
             print_abuseipdb_result(
-                str(ip),
-                fresh_entries[str(ip)]["abuse_confidence_score"],
+                ip,
+                fresh_entries[ip]["abuse_confidence_score"],
                 cached=True,
             )
             continue
@@ -181,7 +181,7 @@ if should_check_ips and abuseipdb_api_key:
         # 401, 429 and connection errors repeat for every IP, so exit.
         # Other errors may only affect this IP, so skip it.
         try:
-            abuseipdb_result = futures[str(ip)].result()
+            abuseipdb_result = futures[ip].result()
         except requests.HTTPError as error:
             status_code = error.response.status_code
             if status_code == 401:
@@ -218,13 +218,13 @@ if should_check_ips and abuseipdb_api_key:
         abuse_score = abuseipdb_result["abuseConfidenceScore"]
 
         # Errors never get here; only results are cached.
-        abuseipdb_ip_cache[str(ip)] = {
+        abuseipdb_ip_cache[ip] = {
             "abuse_confidence_score": abuse_score,
             "checked_at": current_timestamp(),
         }
         save_cache(cache)
 
-        print_abuseipdb_result(str(ip), abuse_score)
+        print_abuseipdb_result(ip, abuse_score)
 
     elapsed_seconds = time.perf_counter() - start_time
     print(f"\nAbuseIPDB lookups: {len(public_ips)} in {elapsed_seconds:.2f} s")
