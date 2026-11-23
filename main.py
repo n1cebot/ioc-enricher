@@ -257,6 +257,7 @@ if virustotal_lookups and virustotal_api_key:
     print("\nVirusTotal results:")
     virustotal_cache = cache.setdefault("virustotal", {})
     requests_sent = 0
+    virustotal_stopped = False
     start_time = time.perf_counter()
     for ioc_type, ioc_value in virustotal_lookups:
         type_cache = virustotal_cache.setdefault(ioc_type, {})
@@ -271,11 +272,17 @@ if virustotal_lookups and virustotal_api_key:
             )
             continue
 
+        # After a 401, 429 or connection error, send no more requests.
+        if virustotal_stopped:
+            print(f"{ioc_value} --- not checked: VirusTotal lookups stopped")
+            continue
+
         if requests_sent > 0:
             time.sleep(VIRUSTOTAL_REQUEST_INTERVAL_SECONDS)
         requests_sent += 1
 
-        # 401, 429 and connection errors repeat for every IOC, so exit.
+        # 401, 429 and connection errors repeat for every IOC,
+        # so stop sending requests.
         # Other errors may only affect this IOC, so skip it.
         try:
             virustotal_result = check_virustotal(
@@ -286,18 +293,33 @@ if virustotal_lookups and virustotal_api_key:
         except requests.HTTPError as error:
             status_code = error.response.status_code
             if status_code == 401:
-                sys.exit(
+                print(
                     "error: VirusTotal rejected the API key (HTTP 401). "
-                    "Check VIRUSTOTAL_API_KEY in .env."
+                    "Check VIRUSTOTAL_API_KEY in .env. "
+                    "Skipping the remaining VirusTotal lookups.",
+                    file=sys.stderr,
                 )
+                virustotal_stopped = True
+                print(
+                    f"{ioc_value} --- not checked: API key rejected (HTTP 401)"
+                )
+                continue
             elif status_code == 404:
                 analysis_stats = None
             elif status_code == 429:
-                sys.exit(
+                print(
                     "error: VirusTotal request limit reached (HTTP 429). "
                     "The daily limit (500) is probably used up. "
-                    "Try again tomorrow."
+                    "Try again tomorrow. "
+                    "Skipping the remaining VirusTotal lookups.",
+                    file=sys.stderr,
                 )
+                virustotal_stopped = True
+                print(
+                    f"{ioc_value} --- not checked: "
+                    "request limit reached (HTTP 429)"
+                )
+                continue
             elif 500 <= status_code <= 599:
                 print(
                     f"{ioc_value} --- not checked: VirusTotal server error "
@@ -314,10 +336,15 @@ if virustotal_lookups and virustotal_api_key:
             print(f"{ioc_value} --- not checked: no response in time")
             continue
         except requests.ConnectionError:
-            sys.exit(
+            print(
                 "error: cannot connect to VirusTotal. "
-                "Check your internet connection."
+                "Check your internet connection. "
+                "Skipping the remaining VirusTotal lookups.",
+                file=sys.stderr,
             )
+            virustotal_stopped = True
+            print(f"{ioc_value} --- not checked: no connection")
+            continue
         else:
             analysis_stats = virustotal_result["last_analysis_stats"]
 
