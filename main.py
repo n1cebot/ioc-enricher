@@ -178,22 +178,29 @@ if should_check_ips and abuseipdb_api_key:
             )
             continue
 
-        # 401, 429 and connection errors repeat for every IP, so exit.
+        # 401 and 429 repeat for every IP, so stop AbuseIPDB lookups.
+        # A connection error likely affects VirusTotal too, so exit.
         # Other errors may only affect this IP, so skip it.
         try:
             abuseipdb_result = futures[ip].result()
         except requests.HTTPError as error:
             status_code = error.response.status_code
             if status_code == 401:
-                sys.exit(
+                print(
                     "error: AbuseIPDB rejected the API key (HTTP 401). "
-                    "Check ABUSEIPDB_API_KEY in .env."
+                    "Check ABUSEIPDB_API_KEY in .env. "
+                    "Skipping the remaining AbuseIPDB lookups.",
+                    file=sys.stderr,
                 )
+                break
             elif status_code == 429:
-                sys.exit(
+                print(
                     "error: AbuseIPDB daily request limit reached (HTTP 429). "
-                    "Try again tomorrow."
+                    "Try again tomorrow. "
+                    "Skipping the remaining AbuseIPDB lookups.",
+                    file=sys.stderr,
                 )
+                break
             elif 500 <= status_code <= 599:
                 print(
                     f"{ip} --- not checked: AbuseIPDB server error "
