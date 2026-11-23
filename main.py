@@ -169,7 +169,7 @@ if should_check_ips and abuseipdb_api_key:
             for ip in ips_to_check
         }
 
-    abuseipdb_error_reported = False
+    reported_errors = set()
     for ip in public_ips:
         if ip in fresh_entries:
             print_abuseipdb_result(
@@ -179,31 +179,31 @@ if should_check_ips and abuseipdb_api_key:
             )
             continue
 
-        # 401 and 429 repeat for every IP; explain them only once.
-        # A connection error likely affects VirusTotal too, so exit.
+        # 401, 429 and connection errors repeat for every IP,
+        # so explain each of them only once.
         # Other errors may only affect this IP, so skip it.
         try:
             abuseipdb_result = futures[ip].result()
         except requests.HTTPError as error:
             status_code = error.response.status_code
             if status_code == 401:
-                if not abuseipdb_error_reported:
+                if "key_rejected" not in reported_errors:
                     print(
                         "error: AbuseIPDB rejected the API key (HTTP 401). "
                         "Check ABUSEIPDB_API_KEY in .env.",
                         file=sys.stderr,
                     )
-                    abuseipdb_error_reported = True
+                    reported_errors.add("key_rejected")
                 print(f"{ip} --- not checked: API key rejected (HTTP 401)")
                 continue
             elif status_code == 429:
-                if not abuseipdb_error_reported:
+                if "limit_reached" not in reported_errors:
                     print(
                         "error: AbuseIPDB daily request limit reached "
                         "(HTTP 429). Try again tomorrow.",
                         file=sys.stderr,
                     )
-                    abuseipdb_error_reported = True
+                    reported_errors.add("limit_reached")
                 print(f"{ip} --- not checked: daily limit reached (HTTP 429)")
                 continue
             elif 500 <= status_code <= 599:
@@ -222,10 +222,15 @@ if should_check_ips and abuseipdb_api_key:
             print(f"{ip} --- not checked: no response in time")
             continue
         except requests.ConnectionError:
-            sys.exit(
-                "error: cannot connect to AbuseIPDB. "
-                "Check your internet connection."
-            )
+            if "no_connection" not in reported_errors:
+                print(
+                    "error: cannot connect to AbuseIPDB. "
+                    "Check your internet connection.",
+                    file=sys.stderr,
+                )
+                reported_errors.add("no_connection")
+            print(f"{ip} --- not checked: no connection")
+            continue
 
         abuse_score = abuseipdb_result["abuseConfidenceScore"]
 
