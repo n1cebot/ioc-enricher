@@ -25,11 +25,24 @@ from extractor import IOC_TYPES, extract_iocs
 ABUSEIPDB_MAX_WORKERS = 5
 
 
+def print_abuseipdb_result(ip_address, abuse_score, cached=False):
+    """Print the AbuseIPDB result line for one IP address.
+
+    Mark the line with "(cached)" if cached is True.
+    """
+    cache_note = " (cached)" if cached else ""
+
+    print(
+        f"{ip_address} --- abuse confidence score: "
+        f"{abuse_score}/100{cache_note}"
+    )
+
+
 def print_virustotal_result(ioc_value, analysis_stats, cached=False):
     """Print the VirusTotal result line for one IOC.
 
-    Print "not found in VirusTotal" if analysis_stats is None. Mark the
-    line with "(cached)" if cached is True.
+    Print "not found in VirusTotal" if analysis_stats is None.
+    Mark the line with "(cached)" if cached is True.
     """
     cache_note = " (cached)" if cached else ""
 
@@ -184,7 +197,6 @@ if should_check_ips and abuseipdb_api_key:
                 "Check your internet connection."
             )
 
-        checked_ip = abuseipdb_result["ipAddress"]
         abuse_score = abuseipdb_result["abuseConfidenceScore"]
 
         # Errors never get here; only results are cached.
@@ -194,7 +206,7 @@ if should_check_ips and abuseipdb_api_key:
         }
         save_cache(cache)
 
-        print(f"{checked_ip} --- abuse confidence score: {abuse_score}/100")
+        print_abuseipdb_result(str(ip), abuse_score)
 
     elapsed_seconds = time.perf_counter() - start_time
     print(f"\nAbuseIPDB lookups: {len(public_ips)} in {elapsed_seconds:.2f} s")
