@@ -152,18 +152,36 @@ if should_check_ips and abuseipdb_api_key:
     abuseipdb_ip_cache = abuseipdb_cache.setdefault("ips", {})
     start_time = time.perf_counter()
 
+    # Only IPs without a fresh cached result are sent to the threads.
+    fresh_entries = {}
+    ips_to_check = []
+    for ip in public_ips:
+        cached_entry = abuseipdb_ip_cache.get(str(ip))
+        if cached_entry is not None and is_fresh(cached_entry["checked_at"]):
+            fresh_entries[str(ip)] = cached_entry
+        else:
+            ips_to_check.append(str(ip))
+
     # Requests run in threads; their errors are raised by result() below.
     with ThreadPoolExecutor(max_workers=ABUSEIPDB_MAX_WORKERS) as executor:
-        futures = [
-            executor.submit(check_ip_abuseipdb, str(ip), abuseipdb_api_key)
-            for ip in public_ips
-        ]
+        futures = {
+            ip: executor.submit(check_ip_abuseipdb, ip, abuseipdb_api_key)
+            for ip in ips_to_check
+        }
 
-    for ip, future in zip(public_ips, futures):
+    for ip in public_ips:
+        if str(ip) in fresh_entries:
+            print_abuseipdb_result(
+                str(ip),
+                fresh_entries[str(ip)]["abuse_confidence_score"],
+                cached=True,
+            )
+            continue
+
         # 401, 429 and connection errors repeat for every IP, so exit.
         # Other errors may only affect this IP, so skip it.
         try:
-            abuseipdb_result = future.result()
+            abuseipdb_result = futures[str(ip)].result()
         except requests.HTTPError as error:
             status_code = error.response.status_code
             if status_code == 401:
