@@ -88,6 +88,37 @@ except UnicodeDecodeError:
 
 iocs = extract_iocs(raw_text)
 
+# Every extracted IOC gets an entry; lookups replace None with results.
+results = {}
+
+if "ips" in args.types:
+    results["ips"] = {}
+    for ip in iocs["valid_ips"]:
+        results["ips"][str(ip)] = {
+            "scope": "public" if ip.is_global else "non-public",
+            "abuseipdb": None,
+            "virustotal": None,
+        }
+
+if "urls" in args.types:
+    results["urls"] = {}
+    for url in iocs["urls"]:
+        results["urls"][url] = {"virustotal": None}
+
+if "domains" in args.types:
+    results["domains"] = {}
+    for domain in iocs["domains"]:
+        results["domains"][domain] = {"virustotal": None}
+
+if "hashes" in args.types:
+    results["hashes"] = {}
+    for hash_type, hashes in iocs["hashes"].items():
+        for hash_value in hashes:
+            results["hashes"][hash_value] = {
+                "hash_type": hash_type,
+                "virustotal": None,
+            }
+
 if "ips" in args.types:
     for invalid_ip in iocs["invalid_ips"]:
         print(f"Skipping invalid IP address: {invalid_ip}")
