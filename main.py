@@ -210,6 +210,8 @@ if should_check_ips and abuseipdb_api_key:
             )
             continue
 
+        not_checked_reason = None
+
         # 401, 429 and connection errors repeat for every IP,
         # so explain each of them only once.
         # Other errors may only affect this IP, so skip it.
@@ -225,8 +227,7 @@ if should_check_ips and abuseipdb_api_key:
                         file=sys.stderr,
                     )
                     reported_errors.add("key_rejected")
-                print(f"{ip} --- not checked: API key rejected (HTTP 401)")
-                continue
+                not_checked_reason = "API key rejected (HTTP 401)"
             elif status_code == 429:
                 if "limit_reached" not in reported_errors:
                     print(
@@ -235,23 +236,15 @@ if should_check_ips and abuseipdb_api_key:
                         file=sys.stderr,
                     )
                     reported_errors.add("limit_reached")
-                print(f"{ip} --- not checked: daily limit reached (HTTP 429)")
-                continue
+                not_checked_reason = "daily limit reached (HTTP 429)"
             elif 500 <= status_code <= 599:
-                print(
-                    f"{ip} --- not checked: AbuseIPDB server error "
-                    f"(HTTP {status_code})"
+                not_checked_reason = (
+                    f"AbuseIPDB server error (HTTP {status_code})"
                 )
-                continue
             else:
-                print(
-                    f"{ip} --- not checked: request failed "
-                    f"(HTTP {status_code})"
-                )
-                continue
+                not_checked_reason = f"request failed (HTTP {status_code})"
         except requests.Timeout:
-            print(f"{ip} --- not checked: no response in time")
-            continue
+            not_checked_reason = "no response in time"
         except requests.ConnectionError:
             if "no_connection" not in reported_errors:
                 print(
@@ -260,7 +253,10 @@ if should_check_ips and abuseipdb_api_key:
                     file=sys.stderr,
                 )
                 reported_errors.add("no_connection")
-            print(f"{ip} --- not checked: no connection")
+            not_checked_reason = "no connection"
+
+        if not_checked_reason is not None:
+            print(f"{ip} --- not checked: {not_checked_reason}")
             continue
 
         abuse_score = abuseipdb_result["abuseConfidenceScore"]
