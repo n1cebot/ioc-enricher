@@ -203,11 +203,13 @@ if should_check_ips and abuseipdb_api_key:
     reported_errors = set()
     for ip in public_ips:
         if ip in fresh_entries:
-            print_abuseipdb_result(
-                ip,
-                fresh_entries[ip]["abuse_confidence_score"],
-                cached=True,
-            )
+            abuse_score = fresh_entries[ip]["abuse_confidence_score"]
+            results["ips"][ip]["abuseipdb"] = {
+                "abuse_confidence_score": abuse_score,
+                "cached": True,
+                "not_checked_reason": None,
+            }
+            print_abuseipdb_result(ip, abuse_score, cached=True)
             continue
 
         not_checked_reason = None
@@ -256,6 +258,11 @@ if should_check_ips and abuseipdb_api_key:
             not_checked_reason = "no connection"
 
         if not_checked_reason is not None:
+            results["ips"][ip]["abuseipdb"] = {
+                "abuse_confidence_score": None,
+                "cached": False,
+                "not_checked_reason": not_checked_reason,
+            }
             print(f"{ip} --- not checked: {not_checked_reason}")
             continue
 
@@ -268,6 +275,11 @@ if should_check_ips and abuseipdb_api_key:
         }
         save_cache(cache)
 
+        results["ips"][ip]["abuseipdb"] = {
+            "abuse_confidence_score": abuse_score,
+            "cached": False,
+            "not_checked_reason": None,
+        }
         print_abuseipdb_result(ip, abuse_score)
 
     elapsed_seconds = time.perf_counter() - start_time
