@@ -491,3 +491,46 @@ if virustotal_lookups and virustotal_api_key:
         f"\nVirusTotal lookups: {len(virustotal_lookups)} "
         f"in {elapsed_seconds:.2f} s"
     )
+
+if results.get("ips"):
+    ip_rows = []
+    for ip, ip_result in results["ips"].items():
+        ip_rows.append([
+            ip,
+            ip_result["scope"],
+            format_abuseipdb_cell(ip_result["abuseipdb"]),
+            format_virustotal_cell(ip_result["virustotal"]),
+        ])
+    print("\nIP addresses:")
+    print_table(["IP", "SCOPE", "ABUSEIPDB", "VIRUSTOTAL"], ip_rows)
+
+if results.get("urls"):
+    url_rows = []
+    for url, url_result in results["urls"].items():
+        url_rows.append([
+            url,
+            format_virustotal_cell(url_result["virustotal"]),
+        ])
+    print("\nURLs:")
+    print_table(["URL", "VIRUSTOTAL"], url_rows)
+
+if results.get("domains"):
+    domain_rows = []
+    for domain, domain_result in results["domains"].items():
+        domain_rows.append([
+            domain,
+            format_virustotal_cell(domain_result["virustotal"]),
+        ])
+    print("\nDomains:")
+    print_table(["DOMAIN", "VIRUSTOTAL"], domain_rows)
+
+if results.get("hashes"):
+    hash_rows = []
+    for hash_value, hash_result in results["hashes"].items():
+        hash_rows.append([
+            hash_value,
+            hash_result["hash_type"],
+            format_virustotal_cell(hash_result["virustotal"]),
+        ])
+    print("\nHashes:")
+    print_table(["HASH", "TYPE", "VIRUSTOTAL"], hash_rows)
