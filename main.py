@@ -25,6 +25,55 @@ from extractor import IOC_TYPES, extract_iocs
 ABUSEIPDB_MAX_WORKERS = 5
 
 
+def format_abuseipdb_cell(entry):
+    """Return the ABUSEIPDB table cell for one AbuseIPDB entry.
+
+    Return "-" if entry is None, "not checked: <reason>" if the lookup
+    failed, and the score out of 100 otherwise. Cached results end
+    with "(cached)".
+    """
+    if entry is None:
+        return "-"
+    not_checked_reason = entry["not_checked_reason"]
+    if not_checked_reason is not None:
+        return f"not checked: {not_checked_reason}"
+
+    abuse_score = entry["abuse_confidence_score"]
+    cell_text = f"{abuse_score}/100"
+    if entry["cached"]:
+        cell_text += " (cached)"
+    return cell_text
+
+
+def format_virustotal_cell(entry):
+    """Return the VIRUSTOTAL table cell for one VirusTotal entry.
+
+    Return "-" if entry is None, "not checked: <reason>" if the lookup
+    failed, "not found" if VirusTotal has no report, and the malicious
+    and suspicious counts otherwise. Cached results end with "(cached)".
+    """
+    if entry is None:
+        return "-"
+    not_checked_reason = entry["not_checked_reason"]
+    if not_checked_reason is not None:
+        return f"not checked: {not_checked_reason}"
+
+    analysis_stats = entry["analysis_stats"]
+    if analysis_stats is None:
+        cell_text = "not found"
+    else:
+        malicious_count = analysis_stats["malicious"]
+        suspicious_count = analysis_stats["suspicious"]
+        engine_count = sum(analysis_stats.values())
+        cell_text = (
+            f"{malicious_count}/{engine_count} malicious, "
+            f"{suspicious_count} suspicious"
+        )
+    if entry["cached"]:
+        cell_text += " (cached)"
+    return cell_text
+
+
 def print_abuseipdb_result(ip_address, abuse_score, cached=False):
     """Print the AbuseIPDB result line for one IP address.
 
