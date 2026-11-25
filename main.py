@@ -304,15 +304,22 @@ if virustotal_lookups and virustotal_api_key:
         # A fresh cached result skips both the request and the wait.
         cached_entry = type_cache.get(ioc_value)
         if cached_entry is not None and is_fresh(cached_entry["checked_at"]):
-            print_virustotal_result(
-                ioc_value,
-                cached_entry["analysis_stats"],
-                cached=True,
-            )
+            analysis_stats = cached_entry["analysis_stats"]
+            results[ioc_type][ioc_value]["virustotal"] = {
+                "analysis_stats": analysis_stats,
+                "cached": True,
+                "not_checked_reason": None,
+            }
+            print_virustotal_result(ioc_value, analysis_stats, cached=True)
             continue
 
         # After a 401, 429 or connection error, send no more requests.
         if virustotal_stopped:
+            results[ioc_type][ioc_value]["virustotal"] = {
+                "analysis_stats": None,
+                "cached": False,
+                "not_checked_reason": "VirusTotal lookups stopped",
+            }
             print(f"{ioc_value} --- not checked: VirusTotal lookups stopped")
             continue
 
@@ -375,6 +382,11 @@ if virustotal_lookups and virustotal_api_key:
             analysis_stats = virustotal_result["last_analysis_stats"]
 
         if not_checked_reason is not None:
+            results[ioc_type][ioc_value]["virustotal"] = {
+                "analysis_stats": None,
+                "cached": False,
+                "not_checked_reason": not_checked_reason,
+            }
             print(f"{ioc_value} --- not checked: {not_checked_reason}")
             continue
 
@@ -385,6 +397,11 @@ if virustotal_lookups and virustotal_api_key:
         }
         save_cache(cache)
 
+        results[ioc_type][ioc_value]["virustotal"] = {
+            "analysis_stats": analysis_stats,
+            "cached": False,
+            "not_checked_reason": None,
+        }
         print_virustotal_result(ioc_value, analysis_stats)
 
     elapsed_seconds = time.perf_counter() - start_time
