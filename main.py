@@ -294,7 +294,11 @@ if should_check_ips and not abuseipdb_api_key:
     )
 
 if should_check_ips and abuseipdb_api_key:
-    print(f"Looking up {len(public_ips)} IPs in AbuseIPDB...", file=sys.stderr)
+    ip_word = "IP" if len(public_ips) == 1 else "IPs"
+    print(
+        f"Looking up {len(public_ips)} {ip_word} in AbuseIPDB...",
+        file=sys.stderr,
+    )
     abuseipdb_cache = cache.setdefault("abuseipdb", {})
     abuseipdb_ip_cache = abuseipdb_cache.setdefault("ips", {})
     start_time = time.perf_counter()
@@ -413,8 +417,9 @@ if virustotal_lookups and not virustotal_api_key:
     )
 
 if virustotal_lookups and virustotal_api_key:
+    ioc_word = "IOC" if len(virustotal_lookups) == 1 else "IOCs"
     print(
-        f"Looking up {len(virustotal_lookups)} IOCs in VirusTotal "
+        f"Looking up {len(virustotal_lookups)} {ioc_word} in VirusTotal "
         "(about 15 s per request)...",
         file=sys.stderr,
     )
