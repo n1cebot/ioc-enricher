@@ -320,6 +320,8 @@ if virustotal_lookups and virustotal_api_key:
             time.sleep(VIRUSTOTAL_REQUEST_INTERVAL_SECONDS)
         requests_sent += 1
 
+        not_checked_reason = None
+
         # 401, 429 and connection errors repeat for every IOC,
         # so stop sending requests.
         # Other errors may only affect this IOC, so skip it.
@@ -339,10 +341,7 @@ if virustotal_lookups and virustotal_api_key:
                     file=sys.stderr,
                 )
                 virustotal_stopped = True
-                print(
-                    f"{ioc_value} --- not checked: API key rejected (HTTP 401)"
-                )
-                continue
+                not_checked_reason = "API key rejected (HTTP 401)"
             elif status_code == 404:
                 analysis_stats = None
             elif status_code == 429:
@@ -354,26 +353,15 @@ if virustotal_lookups and virustotal_api_key:
                     file=sys.stderr,
                 )
                 virustotal_stopped = True
-                print(
-                    f"{ioc_value} --- not checked: "
-                    "request limit reached (HTTP 429)"
-                )
-                continue
+                not_checked_reason = "request limit reached (HTTP 429)"
             elif 500 <= status_code <= 599:
-                print(
-                    f"{ioc_value} --- not checked: VirusTotal server error "
-                    f"(HTTP {status_code})"
+                not_checked_reason = (
+                    f"VirusTotal server error (HTTP {status_code})"
                 )
-                continue
             else:
-                print(
-                    f"{ioc_value} --- not checked: request failed "
-                    f"(HTTP {status_code})"
-                )
-                continue
+                not_checked_reason = f"request failed (HTTP {status_code})"
         except requests.Timeout:
-            print(f"{ioc_value} --- not checked: no response in time")
-            continue
+            not_checked_reason = "no response in time"
         except requests.ConnectionError:
             print(
                 "error: cannot connect to VirusTotal. "
@@ -382,10 +370,13 @@ if virustotal_lookups and virustotal_api_key:
                 file=sys.stderr,
             )
             virustotal_stopped = True
-            print(f"{ioc_value} --- not checked: no connection")
-            continue
+            not_checked_reason = "no connection"
         else:
             analysis_stats = virustotal_result["last_analysis_stats"]
+
+        if not_checked_reason is not None:
+            print(f"{ioc_value} --- not checked: {not_checked_reason}")
+            continue
 
         # Errors never get here; only results and "not found" are cached.
         type_cache[ioc_value] = {
