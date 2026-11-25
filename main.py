@@ -5,6 +5,7 @@ hashes are checked in VirusTotal only.
 """
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -124,7 +125,19 @@ parser.add_argument(
     metavar="TYPE",
     help=f"IOC types to show and check: {', '.join(IOC_TYPES)} (default: all)",
 )
+parser.add_argument(
+    "-o",
+    "--output",
+    metavar="FILE",
+    help="also save the results to FILE as JSON (must end with .json)",
+)
 args = parser.parse_args()
+
+if args.output is not None and not args.output.lower().endswith(".json"):
+    parser.error(
+        f"unsupported output file: {args.output} "
+        "(use a name ending with .json)"
+    )
 
 try:
     with open(args.input_file, encoding="utf-8") as f:
@@ -483,3 +496,11 @@ for table_index, (headers, rows) in enumerate(tables):
     if table_index > 0:
         print()
     print_table(headers, rows)
+
+if args.output is not None:
+    try:
+        with open(args.output, "w", encoding="utf-8") as f:
+            json.dump(results, f, indent=2)
+    except OSError as error:
+        sys.exit(f"\nerror: cannot write {args.output}: {error.strerror}")
+    print(f"\nResults saved to {args.output}", file=sys.stderr)
