@@ -5,6 +5,8 @@ hashes are checked in VirusTotal only.
 """
 
 import argparse
+import csv
+import json
 import os
 import sys
 import time
@@ -24,39 +26,175 @@ from extractor import IOC_TYPES, extract_iocs
 # AbuseIPDB documents no per-minute limit; a few threads are enough.
 ABUSEIPDB_MAX_WORKERS = 5
 
+# Order must match the CSV rows built from the *_csv_fields functions.
+CSV_HEADERS = [
+    "type",
+    "value",
+    "scope",
+    "hash_type",
+    "abuseipdb_score",
+    "abuseipdb_status",
+    "virustotal_malicious",
+    "virustotal_suspicious",
+    "virustotal_engines",
+    "virustotal_status",
+]
 
-def print_abuseipdb_result(ip_address, abuse_score, cached=False):
-    """Print the AbuseIPDB result line for one IP address.
 
-    Mark the line with "(cached)" if cached is True.
+def count_verdict_engines(analysis_stats):
+    """Return how many engines gave a verdict in analysis_stats.
+
+    Engines that timed out, failed, or do not support the file type
+    are not counted.
     """
-    cache_note = " (cached)" if cached else ""
-
-    print(
-        f"{ip_address} --- abuse confidence score: "
-        f"{abuse_score}/100{cache_note}"
+    return (
+        analysis_stats["malicious"]
+        + analysis_stats["suspicious"]
+        + analysis_stats["undetected"]
+        + analysis_stats["harmless"]
     )
 
 
-def print_virustotal_result(ioc_value, analysis_stats, cached=False):
-    """Print the VirusTotal result line for one IOC.
+def format_abuseipdb_cell(entry):
+    """Return the ABUSEIPDB table cell for one AbuseIPDB entry.
 
-    Print "not found in VirusTotal" if analysis_stats is None.
-    Mark the line with "(cached)" if cached is True.
+    Return "-" if entry is None, "not checked: <reason>" if the lookup
+    failed, and the score out of 100 otherwise. Cached results end
+    with "(cached)".
     """
-    cache_note = " (cached)" if cached else ""
+    if entry is None:
+        return "-"
+    not_checked_reason = entry["not_checked_reason"]
+    if not_checked_reason is not None:
+        return f"not checked: {not_checked_reason}"
 
+    abuse_score = entry["abuse_confidence_score"]
+    cell_text = f"{abuse_score}/100"
+    if entry["cached"]:
+        cell_text += " (cached)"
+    return cell_text
+
+
+def format_virustotal_cell(entry):
+    """Return the VIRUSTOTAL table cell for one VirusTotal entry.
+
+    Return "-" if entry is None, "not checked: <reason>" if the lookup
+    failed, "not found" if VirusTotal has no report, and the malicious
+    and suspicious counts otherwise. Cached results end with "(cached)".
+    """
+    if entry is None:
+        return "-"
+    not_checked_reason = entry["not_checked_reason"]
+    if not_checked_reason is not None:
+        return f"not checked: {not_checked_reason}"
+
+    analysis_stats = entry["analysis_stats"]
     if analysis_stats is None:
-        print(f"{ioc_value} --- not found in VirusTotal{cache_note}")
-        return
+        cell_text = "not found"
+    else:
+        malicious_count = analysis_stats["malicious"]
+        suspicious_count = analysis_stats["suspicious"]
+        engine_count = count_verdict_engines(analysis_stats)
+        cell_text = (
+            f"{malicious_count}/{engine_count} malicious, "
+            f"{suspicious_count} suspicious"
+        )
+    if entry["cached"]:
+        cell_text += " (cached)"
+    return cell_text
+
+
+def abuseipdb_csv_fields(entry):
+    """Return the CSV fields for one AbuseIPDB entry.
+
+    Return the score and a status: "checked", "cached", or
+    "not checked: <reason>". Both fields are empty if entry is None.
+    """
+    if entry is None:
+        return ["", ""]
+    not_checked_reason = entry["not_checked_reason"]
+    if not_checked_reason is not None:
+        return ["", f"not checked: {not_checked_reason}"]
+
+    abuse_score = entry["abuse_confidence_score"]
+    status = "cached" if entry["cached"] else "checked"
+    return [abuse_score, status]
+
+
+def virustotal_csv_fields(entry):
+    """Return the CSV fields for one VirusTotal entry.
+
+    Return the malicious, suspicious, and engine counts and a status:
+    "checked", "cached", "not found", "not found (cached)", or
+    "not checked: <reason>". The counts are empty if there is no
+    report, and all fields are empty if entry is None.
+    """
+    if entry is None:
+        return ["", "", "", ""]
+    not_checked_reason = entry["not_checked_reason"]
+    if not_checked_reason is not None:
+        return ["", "", "", f"not checked: {not_checked_reason}"]
+
+    analysis_stats = entry["analysis_stats"]
+    if analysis_stats is None:
+        status = "not found (cached)" if entry["cached"] else "not found"
+        return ["", "", "", status]
 
     malicious_count = analysis_stats["malicious"]
     suspicious_count = analysis_stats["suspicious"]
-    engine_count = sum(analysis_stats.values())
-    print(
-        f"{ioc_value} --- malicious: {malicious_count}/{engine_count}, "
-        f"suspicious: {suspicious_count}{cache_note}"
-    )
+    engine_count = count_verdict_engines(analysis_stats)
+    status = "cached" if entry["cached"] else "checked"
+    return [malicious_count, suspicious_count, engine_count, status]
+
+
+def print_table(headers, rows):
+    """Print rows as a table with a header and aligned columns.
+
+    Each row is a list of strings, one for each header. Every column is
+    as wide as its longest value or header, and columns are separated
+    by two spaces.
+    """
+    column_widths = [len(header) for header in headers]
+    for row in rows:
+        for column_index, cell in enumerate(row):
+            column_widths[column_index] = max(
+                column_widths[column_index],
+                len(cell),
+            )
+
+    padded_headers = [
+        f"{header:<{width}}" for header, width in zip(headers, column_widths)
+    ]
+    header_line = "  ".join(padded_headers).rstrip()
+    print(header_line)
+
+    dashes = ["-" * width for width in column_widths]
+    dash_line = "  ".join(dashes)
+    print(dash_line)
+
+    for row in rows:
+        padded_cells = [
+            f"{cell:<{width}}" for cell, width in zip(row, column_widths)
+        ]
+        row_line = "  ".join(padded_cells).rstrip()
+        print(row_line)
+
+
+def count_lookup_statuses(entries):
+    """Return how many lookups were checked, cached, and not checked.
+
+    entries is a list of entries from one service. Return the three
+    counts in this order: checked, from cache, and not checked.
+    """
+    checked, from_cache, not_checked = 0, 0, 0
+    for entry in entries:
+        if entry["not_checked_reason"] is not None:
+            not_checked += 1
+        elif entry["cached"]:
+            from_cache += 1
+        else:
+            checked += 1
+    return checked, from_cache, not_checked
 
 
 parser = argparse.ArgumentParser(
@@ -76,7 +214,22 @@ parser.add_argument(
     metavar="TYPE",
     help=f"IOC types to show and check: {', '.join(IOC_TYPES)} (default: all)",
 )
+parser.add_argument(
+    "-o",
+    "--output",
+    metavar="FILE",
+    help="also save the results to FILE as JSON or CSV (.json or .csv)",
+)
 args = parser.parse_args()
+
+if (
+    args.output is not None
+    and not args.output.lower().endswith((".json", ".csv"))
+):
+    parser.error(
+        f"unsupported output file: {args.output} "
+        "(use a name ending with .json or .csv)"
+    )
 
 try:
     with open(args.input_file, encoding="utf-8") as f:
@@ -88,34 +241,42 @@ except UnicodeDecodeError:
 
 iocs = extract_iocs(raw_text)
 
+# Every extracted IOC gets an entry; lookups replace None with results.
+results = {}
+
 if "ips" in args.types:
     for invalid_ip in iocs["invalid_ips"]:
-        print(f"Skipping invalid IP address: {invalid_ip}")
+        print(
+            f"warning: skipping invalid IP address: {invalid_ip}",
+            file=sys.stderr,
+        )
 
-    print("\nIP addresses:")
-    # is_global is False for private, loopback and documentation IPs.
+    results["ips"] = {}
     for ip in iocs["valid_ips"]:
-        if ip.is_global:
-            print(f"{ip} --- public")
-        else:
-            print(f"{ip} --- non-public")
+        results["ips"][str(ip)] = {
+            "scope": "public" if ip.is_global else "non-public",
+            "abuseipdb": None,
+            "virustotal": None,
+        }
 
 if "urls" in args.types:
-    print("\nURLs:")
+    results["urls"] = {}
     for url in iocs["urls"]:
-        print(url)
+        results["urls"][url] = {"virustotal": None}
 
 if "domains" in args.types:
-    print("\nDomains:")
+    results["domains"] = {}
     for domain in iocs["domains"]:
-        print(domain)
+        results["domains"][domain] = {"virustotal": None}
 
 if "hashes" in args.types:
-    print("\nHashes:")
+    results["hashes"] = {}
     for hash_type, hashes in iocs["hashes"].items():
-        print(hash_type)
         for hash_value in hashes:
-            print(hash_value)
+            results["hashes"][hash_value] = {
+                "hash_type": hash_type,
+                "virustotal": None,
+            }
 
 # Non-public IPs have no reputation data; don't waste requests.
 public_ips = [str(ip) for ip in iocs["valid_ips"] if ip.is_global]
@@ -147,7 +308,11 @@ if should_check_ips and not abuseipdb_api_key:
     )
 
 if should_check_ips and abuseipdb_api_key:
-    print("\nAbuseIPDB results:")
+    ip_word = "IP" if len(public_ips) == 1 else "IPs"
+    print(
+        f"Looking up {len(public_ips)} {ip_word} in AbuseIPDB...",
+        file=sys.stderr,
+    )
     abuseipdb_cache = cache.setdefault("abuseipdb", {})
     abuseipdb_ip_cache = abuseipdb_cache.setdefault("ips", {})
     start_time = time.perf_counter()
@@ -172,12 +337,15 @@ if should_check_ips and abuseipdb_api_key:
     reported_errors = set()
     for ip in public_ips:
         if ip in fresh_entries:
-            print_abuseipdb_result(
-                ip,
-                fresh_entries[ip]["abuse_confidence_score"],
-                cached=True,
-            )
+            abuse_score = fresh_entries[ip]["abuse_confidence_score"]
+            results["ips"][ip]["abuseipdb"] = {
+                "abuse_confidence_score": abuse_score,
+                "cached": True,
+                "not_checked_reason": None,
+            }
             continue
+
+        not_checked_reason = None
 
         # 401, 429 and connection errors repeat for every IP,
         # so explain each of them only once.
@@ -194,8 +362,7 @@ if should_check_ips and abuseipdb_api_key:
                         file=sys.stderr,
                     )
                     reported_errors.add("key_rejected")
-                print(f"{ip} --- not checked: API key rejected (HTTP 401)")
-                continue
+                not_checked_reason = "API key rejected (HTTP 401)"
             elif status_code == 429:
                 if "limit_reached" not in reported_errors:
                     print(
@@ -204,23 +371,15 @@ if should_check_ips and abuseipdb_api_key:
                         file=sys.stderr,
                     )
                     reported_errors.add("limit_reached")
-                print(f"{ip} --- not checked: daily limit reached (HTTP 429)")
-                continue
+                not_checked_reason = "daily limit reached (HTTP 429)"
             elif 500 <= status_code <= 599:
-                print(
-                    f"{ip} --- not checked: AbuseIPDB server error "
-                    f"(HTTP {status_code})"
+                not_checked_reason = (
+                    f"AbuseIPDB server error (HTTP {status_code})"
                 )
-                continue
             else:
-                print(
-                    f"{ip} --- not checked: request failed "
-                    f"(HTTP {status_code})"
-                )
-                continue
+                not_checked_reason = f"request failed (HTTP {status_code})"
         except requests.Timeout:
-            print(f"{ip} --- not checked: no response in time")
-            continue
+            not_checked_reason = "no response in time"
         except requests.ConnectionError:
             if "no_connection" not in reported_errors:
                 print(
@@ -229,7 +388,14 @@ if should_check_ips and abuseipdb_api_key:
                     file=sys.stderr,
                 )
                 reported_errors.add("no_connection")
-            print(f"{ip} --- not checked: no connection")
+            not_checked_reason = "no connection"
+
+        if not_checked_reason is not None:
+            results["ips"][ip]["abuseipdb"] = {
+                "abuse_confidence_score": None,
+                "cached": False,
+                "not_checked_reason": not_checked_reason,
+            }
             continue
 
         abuse_score = abuseipdb_result["abuseConfidenceScore"]
@@ -241,10 +407,21 @@ if should_check_ips and abuseipdb_api_key:
         }
         save_cache(cache)
 
-        print_abuseipdb_result(ip, abuse_score)
+        results["ips"][ip]["abuseipdb"] = {
+            "abuse_confidence_score": abuse_score,
+            "cached": False,
+            "not_checked_reason": None,
+        }
 
     elapsed_seconds = time.perf_counter() - start_time
-    print(f"\nAbuseIPDB lookups: {len(public_ips)} in {elapsed_seconds:.2f} s")
+    abuseipdb_entries = [results["ips"][ip]["abuseipdb"] for ip in public_ips]
+    checked, from_cache, not_checked = count_lookup_statuses(abuseipdb_entries)
+    print(
+        f"AbuseIPDB lookups: {len(public_ips)} ({checked} checked, "
+        f"{from_cache} from cache, {not_checked} not checked) "
+        f"in {elapsed_seconds:.2f} s",
+        file=sys.stderr,
+    )
 
 if virustotal_lookups and not virustotal_api_key:
     print(
@@ -254,7 +431,12 @@ if virustotal_lookups and not virustotal_api_key:
     )
 
 if virustotal_lookups and virustotal_api_key:
-    print("\nVirusTotal results:")
+    ioc_word = "IOC" if len(virustotal_lookups) == 1 else "IOCs"
+    print(
+        f"Looking up {len(virustotal_lookups)} {ioc_word} in VirusTotal "
+        "(about 15 s per request)...",
+        file=sys.stderr,
+    )
     virustotal_cache = cache.setdefault("virustotal", {})
     requests_sent = 0
     virustotal_stopped = False
@@ -265,21 +447,28 @@ if virustotal_lookups and virustotal_api_key:
         # A fresh cached result skips both the request and the wait.
         cached_entry = type_cache.get(ioc_value)
         if cached_entry is not None and is_fresh(cached_entry["checked_at"]):
-            print_virustotal_result(
-                ioc_value,
-                cached_entry["analysis_stats"],
-                cached=True,
-            )
+            analysis_stats = cached_entry["analysis_stats"]
+            results[ioc_type][ioc_value]["virustotal"] = {
+                "analysis_stats": analysis_stats,
+                "cached": True,
+                "not_checked_reason": None,
+            }
             continue
 
         # After a 401, 429 or connection error, send no more requests.
         if virustotal_stopped:
-            print(f"{ioc_value} --- not checked: VirusTotal lookups stopped")
+            results[ioc_type][ioc_value]["virustotal"] = {
+                "analysis_stats": None,
+                "cached": False,
+                "not_checked_reason": "VirusTotal lookups stopped",
+            }
             continue
 
         if requests_sent > 0:
             time.sleep(VIRUSTOTAL_REQUEST_INTERVAL_SECONDS)
         requests_sent += 1
+
+        not_checked_reason = None
 
         # 401, 429 and connection errors repeat for every IOC,
         # so stop sending requests.
@@ -300,10 +489,7 @@ if virustotal_lookups and virustotal_api_key:
                     file=sys.stderr,
                 )
                 virustotal_stopped = True
-                print(
-                    f"{ioc_value} --- not checked: API key rejected (HTTP 401)"
-                )
-                continue
+                not_checked_reason = "API key rejected (HTTP 401)"
             elif status_code == 404:
                 analysis_stats = None
             elif status_code == 429:
@@ -315,26 +501,15 @@ if virustotal_lookups and virustotal_api_key:
                     file=sys.stderr,
                 )
                 virustotal_stopped = True
-                print(
-                    f"{ioc_value} --- not checked: "
-                    "request limit reached (HTTP 429)"
-                )
-                continue
+                not_checked_reason = "request limit reached (HTTP 429)"
             elif 500 <= status_code <= 599:
-                print(
-                    f"{ioc_value} --- not checked: VirusTotal server error "
-                    f"(HTTP {status_code})"
+                not_checked_reason = (
+                    f"VirusTotal server error (HTTP {status_code})"
                 )
-                continue
             else:
-                print(
-                    f"{ioc_value} --- not checked: request failed "
-                    f"(HTTP {status_code})"
-                )
-                continue
+                not_checked_reason = f"request failed (HTTP {status_code})"
         except requests.Timeout:
-            print(f"{ioc_value} --- not checked: no response in time")
-            continue
+            not_checked_reason = "no response in time"
         except requests.ConnectionError:
             print(
                 "error: cannot connect to VirusTotal. "
@@ -343,10 +518,17 @@ if virustotal_lookups and virustotal_api_key:
                 file=sys.stderr,
             )
             virustotal_stopped = True
-            print(f"{ioc_value} --- not checked: no connection")
-            continue
+            not_checked_reason = "no connection"
         else:
             analysis_stats = virustotal_result["last_analysis_stats"]
+
+        if not_checked_reason is not None:
+            results[ioc_type][ioc_value]["virustotal"] = {
+                "analysis_stats": None,
+                "cached": False,
+                "not_checked_reason": not_checked_reason,
+            }
+            continue
 
         # Errors never get here; only results and "not found" are cached.
         type_cache[ioc_value] = {
@@ -355,10 +537,102 @@ if virustotal_lookups and virustotal_api_key:
         }
         save_cache(cache)
 
-        print_virustotal_result(ioc_value, analysis_stats)
+        results[ioc_type][ioc_value]["virustotal"] = {
+            "analysis_stats": analysis_stats,
+            "cached": False,
+            "not_checked_reason": None,
+        }
 
     elapsed_seconds = time.perf_counter() - start_time
-    print(
-        f"\nVirusTotal lookups: {len(virustotal_lookups)} "
-        f"in {elapsed_seconds:.2f} s"
+    virustotal_entries = [
+        results[ioc_type][ioc_value]["virustotal"]
+        for ioc_type, ioc_value in virustotal_lookups
+    ]
+    checked, from_cache, not_checked = count_lookup_statuses(
+        virustotal_entries
     )
+    print(
+        f"VirusTotal lookups: {len(virustotal_lookups)} ({checked} checked, "
+        f"{from_cache} from cache, {not_checked} not checked) "
+        f"in {elapsed_seconds:.2f} s",
+        file=sys.stderr,
+    )
+
+tables = []
+
+if results.get("ips"):
+    ip_rows = []
+    for ip, ip_result in results["ips"].items():
+        ip_rows.append([
+            ip,
+            ip_result["scope"],
+            format_abuseipdb_cell(ip_result["abuseipdb"]),
+            format_virustotal_cell(ip_result["virustotal"]),
+        ])
+    tables.append((["IP", "SCOPE", "ABUSEIPDB", "VIRUSTOTAL"], ip_rows))
+
+if results.get("urls"):
+    url_rows = []
+    for url, url_result in results["urls"].items():
+        url_rows.append([
+            url,
+            format_virustotal_cell(url_result["virustotal"]),
+        ])
+    tables.append((["URL", "VIRUSTOTAL"], url_rows))
+
+if results.get("domains"):
+    domain_rows = []
+    for domain, domain_result in results["domains"].items():
+        domain_rows.append([
+            domain,
+            format_virustotal_cell(domain_result["virustotal"]),
+        ])
+    tables.append((["DOMAIN", "VIRUSTOTAL"], domain_rows))
+
+if results.get("hashes"):
+    hash_rows = []
+    for hash_value, hash_result in results["hashes"].items():
+        hash_rows.append([
+            hash_value,
+            hash_result["hash_type"],
+            format_virustotal_cell(hash_result["virustotal"]),
+        ])
+    tables.append((["HASH", "TYPE", "VIRUSTOTAL"], hash_rows))
+
+# Blank line on stderr, so redirected output starts with a table.
+print(file=sys.stderr)
+for table_index, (headers, rows) in enumerate(tables):
+    if table_index > 0:
+        print()
+    print_table(headers, rows)
+
+if args.output is not None:
+    save_as_csv = args.output.lower().endswith(".csv")
+    if save_as_csv:
+        csv_rows = []
+        for ioc_type, type_results in results.items():
+            for ioc_value, ioc_result in type_results.items():
+                row = (
+                    [
+                        ioc_type,
+                        ioc_value,
+                        ioc_result.get("scope", ""),
+                        ioc_result.get("hash_type", ""),
+                    ]
+                    + abuseipdb_csv_fields(ioc_result.get("abuseipdb"))
+                    + virustotal_csv_fields(ioc_result["virustotal"])
+                )
+                csv_rows.append(row)
+
+    try:
+        if save_as_csv:
+            with open(args.output, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(CSV_HEADERS)
+                writer.writerows(csv_rows)
+        else:
+            with open(args.output, "w", encoding="utf-8") as f:
+                json.dump(results, f, indent=2)
+    except OSError as error:
+        sys.exit(f"\nerror: cannot write {args.output}: {error.strerror}")
+    print(f"\nResults saved to {args.output}", file=sys.stderr)
