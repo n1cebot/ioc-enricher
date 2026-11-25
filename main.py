@@ -41,6 +41,20 @@ CSV_HEADERS = [
 ]
 
 
+def count_verdict_engines(analysis_stats):
+    """Return how many engines gave a verdict in analysis_stats.
+
+    Engines that timed out, failed, or do not support the file type
+    are not counted.
+    """
+    return (
+        analysis_stats["malicious"]
+        + analysis_stats["suspicious"]
+        + analysis_stats["undetected"]
+        + analysis_stats["harmless"]
+    )
+
+
 def format_abuseipdb_cell(entry):
     """Return the ABUSEIPDB table cell for one AbuseIPDB entry.
 
@@ -80,7 +94,7 @@ def format_virustotal_cell(entry):
     else:
         malicious_count = analysis_stats["malicious"]
         suspicious_count = analysis_stats["suspicious"]
-        engine_count = sum(analysis_stats.values())
+        engine_count = count_verdict_engines(analysis_stats)
         cell_text = (
             f"{malicious_count}/{engine_count} malicious, "
             f"{suspicious_count} suspicious"
@@ -128,7 +142,7 @@ def virustotal_csv_fields(entry):
 
     malicious_count = analysis_stats["malicious"]
     suspicious_count = analysis_stats["suspicious"]
-    engine_count = sum(analysis_stats.values())
+    engine_count = count_verdict_engines(analysis_stats)
     status = "cached" if entry["cached"] else "checked"
     return [malicious_count, suspicious_count, engine_count, status]
 
