@@ -75,6 +75,49 @@ def format_virustotal_cell(entry):
     return cell_text
 
 
+def abuseipdb_csv_fields(entry):
+    """Return the CSV fields for one AbuseIPDB entry.
+
+    Return the score and a status: "checked", "cached", or
+    "not checked: <reason>". Both fields are empty if entry is None.
+    """
+    if entry is None:
+        return ["", ""]
+    not_checked_reason = entry["not_checked_reason"]
+    if not_checked_reason is not None:
+        return ["", f"not checked: {not_checked_reason}"]
+
+    abuse_score = entry["abuse_confidence_score"]
+    status = "cached" if entry["cached"] else "checked"
+    return [abuse_score, status]
+
+
+def virustotal_csv_fields(entry):
+    """Return the CSV fields for one VirusTotal entry.
+
+    Return the malicious, suspicious, and engine counts and a status:
+    "checked", "cached", "not found", "not found (cached)", or
+    "not checked: <reason>". The counts are empty if there is no
+    report, and all fields are empty if entry is None.
+    """
+    if entry is None:
+        return ["", "", "", ""]
+    not_checked_reason = entry["not_checked_reason"]
+    if not_checked_reason is not None:
+        return ["", "", "", f"not checked: {not_checked_reason}"]
+
+    analysis_stats = entry["analysis_stats"]
+    if analysis_stats is None:
+        status = "not found (cached)" if entry["cached"] else "not found"
+        return ["", "", "", status]
+
+    malicious_count = analysis_stats["malicious"]
+    suspicious_count = analysis_stats["suspicious"]
+    engine_count = sum(analysis_stats.values())
+    status = "cached" if entry["cached"] else "checked"
+    return [malicious_count, suspicious_count, engine_count, status]
+
+
 def print_table(headers, rows):
     """Print rows as a table with a header and aligned columns.
 
@@ -504,3 +547,6 @@ if args.output is not None:
     except OSError as error:
         sys.exit(f"\nerror: cannot write {args.output}: {error.strerror}")
     print(f"\nResults saved to {args.output}", file=sys.stderr)
+
+for url, url_result in results["urls"].items():
+    print(url, virustotal_csv_fields(url_result["virustotal"]))
