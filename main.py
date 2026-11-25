@@ -166,6 +166,23 @@ def print_table(headers, rows):
         print(row_line)
 
 
+def count_lookup_statuses(entries):
+    """Return how many lookups were checked, cached, and not checked.
+
+    entries is a list of entries from one service. Return the three
+    counts in this order: checked, from cache, and not checked.
+    """
+    checked, from_cache, not_checked = 0, 0, 0
+    for entry in entries:
+        if entry["not_checked_reason"] is not None:
+            not_checked += 1
+        elif entry["cached"]:
+            from_cache += 1
+        else:
+            checked += 1
+    return checked, from_cache, not_checked
+
+
 parser = argparse.ArgumentParser(
     description=(
         "Extract IOCs (IPs, URLs, domains, and hashes) from a text file. "
@@ -379,8 +396,12 @@ if should_check_ips and abuseipdb_api_key:
         }
 
     elapsed_seconds = time.perf_counter() - start_time
+    abuseipdb_entries = [results["ips"][ip]["abuseipdb"] for ip in public_ips]
+    checked, from_cache, not_checked = count_lookup_statuses(abuseipdb_entries)
     print(
-        f"AbuseIPDB lookups: {len(public_ips)} in {elapsed_seconds:.2f} s",
+        f"AbuseIPDB lookups: {len(public_ips)} ({checked} checked, "
+        f"{from_cache} from cache, {not_checked} not checked) "
+        f"in {elapsed_seconds:.2f} s",
         file=sys.stderr,
     )
 
@@ -504,8 +525,16 @@ if virustotal_lookups and virustotal_api_key:
         }
 
     elapsed_seconds = time.perf_counter() - start_time
+    virustotal_entries = [
+        results[ioc_type][ioc_value]["virustotal"]
+        for ioc_type, ioc_value in virustotal_lookups
+    ]
+    checked, from_cache, not_checked = count_lookup_statuses(
+        virustotal_entries
+    )
     print(
-        f"VirusTotal lookups: {len(virustotal_lookups)} "
+        f"VirusTotal lookups: {len(virustotal_lookups)} ({checked} checked, "
+        f"{from_cache} from cache, {not_checked} not checked) "
         f"in {elapsed_seconds:.2f} s",
         file=sys.stderr,
     )
