@@ -74,6 +74,39 @@ def format_virustotal_cell(entry):
     return cell_text
 
 
+def print_table(headers, rows):
+    """Print rows as a table with a header and aligned columns.
+
+    Each row is a list of strings, one for each header. Every column is
+    as wide as its longest value or header, and columns are separated
+    by two spaces.
+    """
+    column_widths = [len(header) for header in headers]
+    for row in rows:
+        for column_index, cell in enumerate(row):
+            column_widths[column_index] = max(
+                column_widths[column_index],
+                len(cell),
+            )
+
+    padded_headers = [
+        f"{header:<{width}}" for header, width in zip(headers, column_widths)
+    ]
+    header_line = "  ".join(padded_headers).rstrip()
+    print(header_line)
+
+    dashes = ["-" * width for width in column_widths]
+    dash_line = "  ".join(dashes)
+    print(dash_line)
+
+    for row in rows:
+        padded_cells = [
+            f"{cell:<{width}}" for cell, width in zip(row, column_widths)
+        ]
+        row_line = "  ".join(padded_cells).rstrip()
+        print(row_line)
+
+
 def print_abuseipdb_result(ip_address, abuse_score, cached=False):
     """Print the AbuseIPDB result line for one IP address.
 
