@@ -5,6 +5,7 @@ hashes are checked in VirusTotal only.
 """
 
 import argparse
+import csv
 import json
 import os
 import sys
@@ -24,6 +25,20 @@ from extractor import IOC_TYPES, extract_iocs
 
 # AbuseIPDB documents no per-minute limit; a few threads are enough.
 ABUSEIPDB_MAX_WORKERS = 5
+
+# Order must match the CSV rows built from the *_csv_fields functions.
+CSV_HEADERS = [
+    "type",
+    "value",
+    "scope",
+    "hash_type",
+    "abuseipdb_score",
+    "abuseipdb_status",
+    "virustotal_malicious",
+    "virustotal_suspicious",
+    "virustotal_engines",
+    "virustotal_status",
+]
 
 
 def format_abuseipdb_cell(entry):
@@ -172,14 +187,17 @@ parser.add_argument(
     "-o",
     "--output",
     metavar="FILE",
-    help="also save the results to FILE as JSON (must end with .json)",
+    help="also save the results to FILE as JSON or CSV (.json or .csv)",
 )
 args = parser.parse_args()
 
-if args.output is not None and not args.output.lower().endswith(".json"):
+if (
+    args.output is not None
+    and not args.output.lower().endswith((".json", ".csv"))
+):
     parser.error(
         f"unsupported output file: {args.output} "
-        "(use a name ending with .json)"
+        "(use a name ending with .json or .csv)"
     )
 
 try:
@@ -541,12 +559,32 @@ for table_index, (headers, rows) in enumerate(tables):
     print_table(headers, rows)
 
 if args.output is not None:
+    save_as_csv = args.output.lower().endswith(".csv")
+    if save_as_csv:
+        csv_rows = []
+        for ioc_type, type_results in results.items():
+            for ioc_value, ioc_result in type_results.items():
+                row = (
+                    [
+                        ioc_type,
+                        ioc_value,
+                        ioc_result.get("scope", ""),
+                        ioc_result.get("hash_type", ""),
+                    ]
+                    + abuseipdb_csv_fields(ioc_result.get("abuseipdb"))
+                    + virustotal_csv_fields(ioc_result["virustotal"])
+                )
+                csv_rows.append(row)
+
     try:
-        with open(args.output, "w", encoding="utf-8") as f:
-            json.dump(results, f, indent=2)
+        if save_as_csv:
+            with open(args.output, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(CSV_HEADERS)
+                writer.writerows(csv_rows)
+        else:
+            with open(args.output, "w", encoding="utf-8") as f:
+                json.dump(results, f, indent=2)
     except OSError as error:
         sys.exit(f"\nerror: cannot write {args.output}: {error.strerror}")
     print(f"\nResults saved to {args.output}", file=sys.stderr)
-
-for url, url_result in results["urls"].items():
-    print(url, virustotal_csv_fields(url_result["virustotal"]))
