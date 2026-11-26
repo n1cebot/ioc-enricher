@@ -53,15 +53,18 @@ def extract_urls(text):
 
 
 def extract_domains(text):
-    """Return a sorted list of unique domains found in text.
+    """Return a sorted list of unique lowercase domains found in text.
 
     Skips filenames like report.pdf (see FILE_EXTENSIONS).
     """
-    domain_matches = re.findall(r"\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b", text)
+    domain_matches = [
+        d.lower()
+        for d in re.findall(r"\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b", text)
+    ]
     domains = []
     for match in domain_matches:
         suffix = match.rsplit(".", 1)[-1]
-        if suffix.lower() not in FILE_EXTENSIONS:
+        if suffix not in FILE_EXTENSIONS:
             domains.append(match)
     return sorted(set(domains))
 
