@@ -1,16 +1,20 @@
-"""Extract IOCs (IPs, URLs, domains, hashes) from text."""
+"""Extract IOCs (IPs, URLs, domains, and hashes) from text."""
 
 import ipaddress
 import re
 
+# Used by main.py for the --types choices.
 IOC_TYPES = ["ips", "urls", "domains", "hashes"]
+
 REFANG_REPLACEMENTS = {"hxxp": "http", r"\[\.\]": ".", r"\[:\]": ":"}
 HASH_LENGTHS = {"MD5": 32, "SHA1": 40, "SHA256": 64}
 
 # File extensions to drop from domain results.
-# Those that are also TLDs (zip, py, pl) are left out.
-FILE_EXTENSIONS = {"exe", "dll", "msi", "bat", "ps1", "vbs", "js",
-                   "pdf", "doc", "docx", "xlsx", "txt", "lnk", "iso"}
+# zip, py, and pl aren't here because they're also real TLDs.
+FILE_EXTENSIONS = {
+    "exe", "dll", "msi", "bat", "ps1", "vbs", "js", "pdf", "doc", "docx",
+    "xlsx", "txt", "lnk", "iso",
+}
 
 
 def refang_text(text):
@@ -23,8 +27,8 @@ def refang_text(text):
 def extract_ips(text):
     """Return a (valid, invalid) tuple of IPv4 addresses found in text.
 
-    Valid addresses are IPv4Address objects; invalid ones are raw
-    strings that failed validation (e.g. 999.1.1.1).
+    Valid addresses are IPv4Address objects. Invalid ones
+    (like 999.1.1.1) are kept as plain strings.
     """
     # Loose match; the 0-255 range check is done by ipaddress below.
     ip_matches = re.findall(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b", text)
@@ -43,14 +47,15 @@ def extract_ips(text):
 def extract_urls(text):
     """Return a sorted list of unique http/https URLs found in text."""
     # Trailing \b strips sentence punctuation like a final period.
-    url_matches = re.findall(r"\bhttps?://\S+\b", text, re.IGNORECASE)
+    # Side effect: a trailing "/" is stripped too.
+    url_matches = re.findall(r"\bhttps?://\S+\b", text, flags=re.IGNORECASE)
     return sorted(set(url_matches))
 
 
 def extract_domains(text):
     """Return a sorted list of unique domains found in text.
 
-    Filters out filenames matching FILE_EXTENSIONS (e.g. report.pdf).
+    Skips filenames like report.pdf (see FILE_EXTENSIONS).
     """
     domain_matches = re.findall(r"\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b", text)
     domains = []
@@ -64,9 +69,11 @@ def extract_domains(text):
 def extract_hashes(text):
     """Return unique lowercase hashes found in text, grouped by type."""
     hashes_by_type = {}
-    # Type is guessed by length. \b keeps longer hashes from also
-    # matching as shorter ones (e.g. a SHA256 as two MD5s).
+
+    # Type is guessed by length. Without \b, a SHA256 would also
+    # match as two MD5s.
     for hash_type, length in HASH_LENGTHS.items():
+        # {{ and }} are just { and } in an f-string, e.g. {32}.
         hash_pattern = rf"\b[a-fA-F0-9]{{{length}}}\b"
         hash_matches = [h.lower() for h in re.findall(hash_pattern, text)]
         hashes_by_type[hash_type] = sorted(set(hash_matches))
