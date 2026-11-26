@@ -6,7 +6,9 @@ import re
 # Used by main.py for the --types choices.
 IOC_TYPES = ["ips", "urls", "domains", "hashes"]
 
+# Keys are regex patterns, so brackets and dots are escaped.
 REFANG_REPLACEMENTS = {"hxxp": "http", r"\[\.\]": ".", r"\[:\]": ":"}
+
 HASH_LENGTHS = {"MD5": 32, "SHA1": 40, "SHA256": 64}
 
 # File extensions to drop from domain results.
