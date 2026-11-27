@@ -12,8 +12,7 @@ CACHE_MAX_AGE_HOURS = 6
 def load_cache():
     """Load cached lookup results from CACHE_FILE.
 
-    Return an empty dict if the file does not exist or is not valid
-    JSON.
+    Return an empty dict if the file is missing or not valid JSON.
     """
     # The cache is only a copy; if it's missing or broken, start empty.
     try:
@@ -37,8 +36,7 @@ def current_timestamp():
 def is_fresh(timestamp):
     """Return True if timestamp is less than CACHE_MAX_AGE_HOURS old.
 
-    Return False for an invalid timestamp, so the result is looked up
-    again.
+    Return False for a bad timestamp, so the result is looked up again.
     """
     # ValueError: bad format; TypeError: not a string or no time zone.
     try:
