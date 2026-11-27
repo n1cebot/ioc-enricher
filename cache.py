@@ -2,8 +2,10 @@
 
 import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
-CACHE_FILE = "lookup_cache.json"
+# Next to cache.py, so every run uses the same file regardless of cwd.
+CACHE_FILE = Path(__file__).parent / "lookup_cache.json"
 
 # Detections can change within hours; older results are looked up again.
 CACHE_MAX_AGE_HOURS = 6
