@@ -464,6 +464,8 @@ if virustotal_lookups and virustotal_api_key:
             }
             continue
 
+        # Failed requests also use up the limit,
+        # so count before sending.
         if requests_sent > 0:
             time.sleep(VIRUSTOTAL_REQUEST_INTERVAL_SECONDS)
         requests_sent += 1
