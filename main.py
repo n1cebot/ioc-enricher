@@ -26,7 +26,7 @@ from extractor import IOC_TYPES, extract_iocs
 # AbuseIPDB documents no per-minute limit; a few threads are enough.
 ABUSEIPDB_MAX_WORKERS = 5
 
-# Order must match the CSV rows built from the *_csv_fields functions.
+# Order must match the CSV rows built at the end of this file.
 CSV_HEADERS = [
     "type",
     "value",
@@ -150,9 +150,7 @@ def virustotal_csv_fields(entry):
 def print_table(headers, rows):
     """Print rows as a table with a header and aligned columns.
 
-    Each row is a list of strings, one for each header. Every column is
-    as wide as its longest value or header, and columns are separated
-    by two spaces.
+    Each row is a list of strings, one for each header.
     """
     column_widths = [len(header) for header in headers]
     for row in rows:
@@ -183,8 +181,7 @@ def print_table(headers, rows):
 def count_lookup_statuses(entries):
     """Return how many lookups were checked, cached, and not checked.
 
-    entries is a list of entries from one service. Return the three
-    counts in this order: checked, from cache, and not checked.
+    entries is a list of entries from one service.
     """
     checked, from_cache, not_checked = 0, 0, 0
     for entry in entries:
@@ -241,7 +238,8 @@ except UnicodeDecodeError:
 
 iocs = extract_iocs(raw_text)
 
-# Every extracted IOC gets an entry; lookups replace None with results.
+# Each IOC of the selected types gets an entry.
+# Lookups replace its None values with results.
 results = {}
 
 if "ips" in args.types:
@@ -327,7 +325,7 @@ if should_check_ips and abuseipdb_api_key:
         else:
             ips_to_check.append(ip)
 
-    # Requests run in threads; their errors are raised by result() below.
+    # Requests run in threads; their errors are raised by result().
     with ThreadPoolExecutor(max_workers=ABUSEIPDB_MAX_WORKERS) as executor:
         futures = {
             ip: executor.submit(check_ip_abuseipdb, ip, abuseipdb_api_key)
@@ -347,9 +345,9 @@ if should_check_ips and abuseipdb_api_key:
 
         not_checked_reason = None
 
-        # 401, 429 and connection errors repeat for every IP,
+        # 401, 429, and connection errors repeat for every IP,
         # so explain each of them only once.
-        # Other errors may only affect this IP, so skip it.
+        # Other errors may only affect this IP; the table shows why.
         try:
             abuseipdb_result = futures[ip].result()
         except requests.HTTPError as error:
@@ -455,7 +453,7 @@ if virustotal_lookups and virustotal_api_key:
             }
             continue
 
-        # After a 401, 429 or connection error, send no more requests.
+        # After a 401, 429, or connection error, send no more requests.
         if virustotal_stopped:
             results[ioc_type][ioc_value]["virustotal"] = {
                 "analysis_stats": None,
@@ -470,7 +468,7 @@ if virustotal_lookups and virustotal_api_key:
 
         not_checked_reason = None
 
-        # 401, 429 and connection errors repeat for every IOC,
+        # 401, 429, and connection errors repeat for every IOC,
         # so stop sending requests.
         # Other errors may only affect this IOC, so skip it.
         try:
@@ -491,6 +489,7 @@ if virustotal_lookups and virustotal_api_key:
                 virustotal_stopped = True
                 not_checked_reason = "API key rejected (HTTP 401)"
             elif status_code == 404:
+                # Not an error: VirusTotal has no report for this IOC.
                 analysis_stats = None
             elif status_code == 429:
                 print(
@@ -530,7 +529,8 @@ if virustotal_lookups and virustotal_api_key:
             }
             continue
 
-        # Errors never get here; only results and "not found" are cached.
+        # Errors never get here; results and "not found" are cached.
+        # Saving after each one means Ctrl+C doesn't lose earlier ones.
         type_cache[ioc_value] = {
             "analysis_stats": analysis_stats,
             "checked_at": current_timestamp(),
