@@ -603,12 +603,18 @@ if results.get("hashes"):
         ])
     tables.append((["HASH", "TYPE", "VIRUSTOTAL"], hash_rows))
 
-# Blank line on stderr, so redirected output starts with a table.
-print(file=sys.stderr)
-for table_index, (headers, rows) in enumerate(tables):
-    if table_index > 0:
-        print()
-    print_table(headers, rows)
+if tables:
+    # Blank line on stderr, so redirected output starts with a table.
+    print(file=sys.stderr)
+    for table_index, (headers, rows) in enumerate(tables):
+        if table_index > 0:
+            print()
+        print_table(headers, rows)
+else:
+    print(
+        f"No IOCs of the selected types found in {args.input_file}.",
+        file=sys.stderr,
+    )
 
 if args.output is not None:
     save_as_csv = args.output.lower().endswith(".csv")
