@@ -403,13 +403,15 @@ if should_check_ips and abuseipdb_api_key:
             "abuse_confidence_score": abuse_score,
             "checked_at": current_timestamp(),
         }
-        save_cache(cache)
 
         results["ips"][ip]["abuseipdb"] = {
             "abuse_confidence_score": abuse_score,
             "cached": False,
             "not_checked_reason": None,
         }
+
+    # Threads finished before this loop, so one save is enough.
+    save_cache(cache)
 
     elapsed_seconds = time.perf_counter() - start_time
     abuseipdb_entries = [results["ips"][ip]["abuseipdb"] for ip in public_ips]
