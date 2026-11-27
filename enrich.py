@@ -23,18 +23,16 @@ VIRUSTOTAL_COLLECTIONS = {
 }
 
 # The free API allows 4 requests per minute; 60 s / 4 = 15 s.
+# Used by main.py to wait between requests.
 VIRUSTOTAL_REQUEST_INTERVAL_SECONDS = 15
 
 
 def check_ip_abuseipdb(ip_address, api_key):
-    """Look up an IP address in AbuseIPDB and return the report data.
+    """Check an IP in AbuseIPDB and return the "data" dict.
 
-    Query the CHECK endpoint and return the "data" dict from the JSON
-    response (e.g. abuseConfidenceScore, countryCode, totalReports).
-
-    Raise requests.HTTPError for an error status code,
-    requests.ConnectionError if AbuseIPDB cannot be reached, and
-    requests.Timeout if it does not respond in time.
+    The field we use is abuseConfidenceScore (0-100). Errors from
+    requests (HTTPError, ConnectionError, Timeout) are not caught
+    here; the caller handles them.
     """
     headers = {
         "Accept": "application/json",
@@ -56,17 +54,15 @@ def check_ip_abuseipdb(ip_address, api_key):
 
 
 def check_virustotal(ioc_type, ioc_value, api_key):
-    """Look up an IOC in VirusTotal and return its attributes.
+    """Check an IOC in VirusTotal and return the "attributes" dict.
 
-    Map ioc_type (a key of VIRUSTOTAL_COLLECTIONS, e.g. "ips") to a
-    VirusTotal collection, query it for ioc_value (URLs are encoded as
-    VirusTotal identifiers first) and return the "attributes" dict
-    from the JSON response (e.g. last_analysis_stats, reputation).
+    ioc_type is a key of VIRUSTOTAL_COLLECTIONS, e.g. "ips". URLs are
+    passed as plain text and encoded here. The field we use is
+    last_analysis_stats.
 
-    Raise KeyError for an unsupported ioc_type, requests.HTTPError
-    for an error status code, requests.ConnectionError if VirusTotal
-    cannot be reached, and requests.Timeout if it does not respond in
-    time.
+    Raise KeyError for an unknown ioc_type. Errors from requests
+    (HTTPError, ConnectionError, Timeout) are not caught here; the
+    caller handles them.
     """
     # VirusTotal identifies URLs by unpadded URL-safe base64.
     if ioc_type == "urls":
@@ -76,7 +72,7 @@ def check_virustotal(ioc_type, ioc_value, api_key):
         ioc_id = ioc_value
 
     collection = VIRUSTOTAL_COLLECTIONS[ioc_type]
-    url = f"{VIRUSTOTAL_BASE_URL}/{collection}/{ioc_id}"
+    api_url = f"{VIRUSTOTAL_BASE_URL}/{collection}/{ioc_id}"
 
     headers = {
         "Accept": "application/json",
@@ -84,7 +80,7 @@ def check_virustotal(ioc_type, ioc_value, api_key):
     }
 
     response = requests.get(
-        url,
+        api_url,
         headers=headers,
         timeout=REQUEST_TIMEOUT_SECONDS,
     )
