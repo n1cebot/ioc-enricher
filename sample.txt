@@ -1,20 +1,38 @@
-Incident report - phishing campaign (fictional, for testing)
+FICTIONAL INCIDENT REPORT - for testing ioc-enricher only.
+All domains are reserved example domains (RFC 2606). All IP addresses
+are from documentation or private ranges, except two public DNS
+resolvers. The hashes belong to the harmless EICAR test file.
 
-The phishing email was sent from 203.0.113.45 and linked to hxxp://login-secure-update[.]example[.]com/verify.
-A second sample contacted 198.51.100.7 on port 443 and later 198.51.100.7 again.
-The malware also sent DNS queries to public resolvers 8.8.8.8 and 1.1.1.1.
-Defanged URL: hxxps://cdn.example[.]net/payload[.]exe
-Plain URL: https://files.example.org/download/report.pdf
-Domains seen: malicious-site.example.com, update[.]example[.]org
-More defanged forms: 203.0.113[.]99, hXXp://mixed-case[.]example[.]net, hxxps[:]//colon[.]example[.]com/login
-Internal hosts: 192.168.1.10, 10.0.0.5
-Invalid value that looks like an IP: 999.1.1.1
-Version string that is not an IP: 1.2.3
-Too many digits, not an IP: 172.16.5.1234
-Attachment: Invoice.PDF
+Case: phishing campaign against the finance team
+Date: 2026-11-02
 
-Hashes:
-MD5: 44d88612fea8a8f36de82e1278abb02f
-SHA1: 3395856ce81f2b7382dee72602f798b642f14140
+Timeline (UTC)
+08:14  A phishing email from billing@payroll-notice.example.net reached
+       three users. Subject: "Overdue invoice". Attachment: Invoice.PDF
+08:15  The email linked to
+       hxxp://login-secure-update[.]example[.]com/verify
+       and was sent from mail server 203.0.113.45.
+08:31  One user opened the link. The workstation (192.168.1.10) then
+       downloaded hxxps://cdn.example[.]net/payload[.]exe
+08:32  The payload connected to 198.51.100.7 on port 443.
+08:40  More traffic to 198.51.100.7, and DNS queries to the public
+       resolvers 8.8.8.8 and 1.1.1.1.
+08:52  Beaconing to malicious-site.example.com and update[.]example[.]org
+       (in the proxy log as Update.Example.ORG).
+09:05  More URLs found in the proxy log:
+       hXXp://mixed-case[.]example[.]net
+       hxxps[:]//colon[.]example[.]com/login
+       https://files.example.org/download/report.pdf
+09:20  File server 10.0.0.5 was accessed from the infected workstation.
+09:41  Another callback to 203.0.113[.]99.
+
+Values that look like IOCs but are not:
+- Invalid IP from a broken log line: 999.1.1.1
+- Agent version string: 1.2.3
+- Too many digits: 172.16.5.1234
+
+File hashes:
+MD5:    44d88612fea8a8f36de82e1278abb02f
+SHA1:   3395856ce81f2b7382dee72602f798b642f14140
 SHA256: 275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f
-Same MD5 in uppercase: 44D88612FEA8A8F36DE82E1278ABB02F
+Same MD5 in an EDR alert (uppercase): 44D88612FEA8A8F36DE82E1278ABB02F
